@@ -4,6 +4,18 @@
 
 - Workspace initialized manually because the referenced Agent initialization script was not present at `C:\Users\xuxin\Documents\Agent\scripts\powershell\initialize-workspace-context.ps1`.
 - Workspace path: `C:\Users\xuxin\Documents\email`.
+- Git/GitHub/CodeGraph status:
+  - Git initialized on branch `main`.
+  - GitHub private repository created and pushed:
+    - `https://github.com/pentiumxp/email`
+  - Initial commit:
+    - `b240a2b` / `初始化 Email 邮箱插件工作区`.
+  - CodeGraph initialized under `.codegraph/`.
+  - CodeGraph status after initialization:
+    - files indexed: 53;
+    - nodes: 733;
+    - edges: 1634.
+  - `.codegraph/codegraph.db` is local-only and ignored by `.codegraph/.gitignore`.
 - Initial project docs created:
   - `docs/DOCS_INDEX.md`
   - `docs/REQUIREMENTS.md`
