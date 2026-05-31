@@ -1,0 +1,44 @@
+{
+  "name": "email-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -p tsconfig.json && vite build",
+    "test": "vitest run",
+    "check": "npm run build && npm run test",
+    "outlook:auth:start": "tsx scripts/outlook-auth.ts start",
+    "outlook:auth:finish": "tsx scripts/outlook-auth.ts finish",
+    "outlook:auth:status": "tsx scripts/outlook-auth.ts status",
+    "gmail:auth:start": "tsx scripts/gmail-auth.ts start",
+    "gmail:auth:finish": "tsx scripts/gmail-auth.ts finish",
+    "gmail:auth:status": "tsx scripts/gmail-auth.ts status",
+    "alimail:auth:status": "tsx scripts/alimail-auth.ts status",
+    "sync:gmail": "tsx scripts/sync-gmail.ts",
+    "sync:alimail": "tsx scripts/sync-alimail.ts",
+    "sync:outlook": "tsx scripts/sync-outlook.ts",
+    "sync:outlook:delta": "tsx scripts/sync-outlook-delta.ts",
+    "poll:outlook": "tsx scripts/poll-outlook.ts",
+    "service": "tsx scripts/email-service.ts"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "imapflow": "^1.3.4",
+    "lucide-react": "^0.562.0",
+    "mailparser": "^3.9.9",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^27.3.0",
+    "playwright-core": "^1.60.0",
+    "tsx": "^4.21.0",
+    "vitest": "^4.0.15"
+  }
+}

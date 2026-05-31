@@ -1,0 +1,437 @@
+import { Archive, Bell, CheckCheck, ChevronLeft, Inbox, Mail, MailOpen, Menu, Paperclip, RefreshCw, Search, Settings, ShieldAlert, Star, Trash2, X } from "lucide-react";
+import type { FormEvent, TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+interface AccountSummary {
+  id: string;
+  provider: string;
+  displayAddress: string;
+  accountLabel: string;
+  status: string;
+  lastSyncAt: string | null;
+}
+
+interface FolderSummary {
+  id: string;
+  accountId: string;
+  providerFolderId: string;
+  displayName: string;
+  folderType: string;
+  messageCount: number;
+  unreadCount: number;
+}
+
+interface MessageSummary {
+  id: string;
+  accountId: string;
+  folderId: string;
+  provider: string;
+  subject: string;
+  sender: string;
+  receivedAt: string;
+  isRead: boolean;
+  attachmentCount: number;
+  bodyState: string;
+}
+
+interface MessageDetail extends MessageSummary {
+  senderAddress: string | null;
+  bodyText: string;
+  bodyExcerpt: string;
+  contentSource: string | null;
+  attachments: Array<{
+    id: string;
+    filename: string;
+    contentType: string | null;
+    sizeBytes: number | null;
+    availabilityState: string;
+  }>;
+}
+
+export function App() {
+  const [accounts, setAccounts] = useState<AccountSummary[]>([]);
+  const [folders, setFolders] = useState<FolderSummary[]>([]);
+  const [messages, setMessages] = useState<MessageSummary[]>([]);
+  const [activeAccountId, setActiveAccountId] = useState("");
+  const [activeFolderId, setActiveFolderId] = useState("");
+  const [activeMessageId, setActiveMessageId] = useState("");
+  const [activeMessage, setActiveMessage] = useState<MessageDetail | null>(null);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("Loading local mailbox");
+  const [folderPaneOpen, setFolderPaneOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+
+  const activeFolder = useMemo(() => folders.find((folder) => folder.id === activeFolderId), [activeFolderId, folders]);
+  const unreadCount = useMemo(() => messages.filter((message) => !message.isRead).length, [messages]);
+  const isEmbedded = useMemo(() => new URLSearchParams(window.location.search).get("embed") === "hermes", []);
+
+  useEffect(() => {
+    applyHostAppearance();
+    void loadAccounts();
+  }, []);
+
+  useEffect(() => {
+    if (!isEmbedded) {
+      return;
+    }
+    const route = activeMessageId && detailOpen
+      ? { name: "message", messageId: activeMessageId }
+      : { name: activeFolder?.displayName || "mailbox", folderId: activeFolderId };
+    window.parent.postMessage({
+      type: "email.plugin.navigation",
+      version: 1,
+      canGoBack: Boolean(detailOpen || folderPaneOpen),
+      route
+    }, "*");
+  }, [activeFolder?.displayName, activeFolderId, activeMessageId, detailOpen, folderPaneOpen, isEmbedded]);
+
+  useEffect(() => {
+    if (!isEmbedded) {
+      return;
+    }
+    function handleMessage(event: MessageEvent) {
+      if (event.data?.type !== "hermes.plugin.back") {
+        return;
+      }
+      if (detailOpen) {
+        setDetailOpen(false);
+        window.parent.postMessage({ type: "email.plugin.back_result", version: 1, handled: true, canGoBack: folderPaneOpen }, "*");
+        return;
+      }
+      if (folderPaneOpen) {
+        setFolderPaneOpen(false);
+        window.parent.postMessage({ type: "email.plugin.back_result", version: 1, handled: true, canGoBack: false }, "*");
+        return;
+      }
+      window.parent.postMessage({ type: "email.plugin.back_result", version: 1, handled: false, canGoBack: false }, "*");
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [detailOpen, folderPaneOpen, isEmbedded]);
+
+  useEffect(() => {
+    if (activeAccountId) {
+      void loadFolders(activeAccountId);
+    }
+  }, [activeAccountId]);
+
+  useEffect(() => {
+    void loadMessages();
+  }, [activeFolderId]);
+
+  useEffect(() => {
+    if (activeMessageId) {
+      void loadMessage(activeMessageId);
+    } else {
+      setActiveMessage(null);
+    }
+  }, [activeMessageId]);
+
+  async function loadAccounts() {
+    const payload = await fetchJson<{ accounts: AccountSummary[] }>("/api/accounts");
+    setAccounts(payload.accounts);
+    if (payload.accounts[0]) {
+      setActiveAccountId(payload.accounts[0].id);
+    }
+    setStatus(payload.accounts.length ? "Connected to local SQLite mail store" : "No local accounts found");
+  }
+
+  async function loadFolders(accountId: string) {
+    const payload = await fetchJson<{ folders: FolderSummary[] }>(`/api/folders?accountId=${encodeURIComponent(accountId)}`);
+    const sorted = [...payload.folders].sort(compareFolders);
+    setFolders(sorted);
+    const inbox = sorted.find(isInboxFolder) || sorted[0];
+    if (inbox) {
+      setActiveFolderId(inbox.id);
+    }
+  }
+
+  async function loadMessages(searchQuery = query) {
+    const params = new URLSearchParams({ limit: "100" });
+    if (searchQuery.trim()) {
+      params.set("query", searchQuery.trim());
+    } else if (activeFolderId) {
+      params.set("folderId", activeFolderId);
+    }
+    const payload = await fetchJson<{ messages: MessageSummary[] }>(`/api/messages?${params.toString()}`);
+    setMessages(payload.messages);
+    setActiveMessageId(payload.messages[0]?.id || "");
+    setDetailOpen(false);
+  }
+
+  async function loadMessage(messageId: string) {
+    const payload = await fetchJson<{ message: MessageDetail }>(`/api/messages/${encodeURIComponent(messageId)}`);
+    setActiveMessage(payload.message);
+  }
+
+  function submitSearch(event: FormEvent) {
+    event.preventDefault();
+    void loadMessages(query);
+  }
+
+  function selectFolder(folderId: string) {
+    setQuery("");
+    setActiveFolderId(folderId);
+    setFolderPaneOpen(false);
+  }
+
+  function selectMessage(messageId: string) {
+    setActiveMessageId(messageId);
+    setDetailOpen(true);
+  }
+
+  async function setActiveReadState(isRead: boolean) {
+    if (!activeMessage) {
+      return;
+    }
+    await fetchJson(`/api/messages/${encodeURIComponent(activeMessage.id)}/read`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accountId: activeMessage.accountId, isRead })
+    });
+    setMessages((current) => current.map((message) => message.id === activeMessage.id ? { ...message, isRead } : message));
+    setActiveMessage({ ...activeMessage, isRead });
+  }
+
+  async function deleteActiveMessage() {
+    if (!activeMessage) {
+      return;
+    }
+    if (!window.confirm("Remove this message from the local mailbox view?")) {
+      return;
+    }
+    await fetchJson(`/api/messages/${encodeURIComponent(activeMessage.id)}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accountId: activeMessage.accountId })
+    });
+    const remaining = messages.filter((message) => message.id !== activeMessage.id);
+    setMessages(remaining);
+    setActiveMessageId(remaining[0]?.id || "");
+    setDetailOpen(false);
+  }
+
+  function recordTouchStart(event: TouchEvent) {
+    const touch = event.touches[0];
+    touchStart.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function handleTouchEnd(event: TouchEvent) {
+    const start = touchStart.current;
+    touchStart.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) {
+      return;
+    }
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (deltaX < 70 || Math.abs(deltaY) > 60) {
+      return;
+    }
+    if (detailOpen) {
+      setDetailOpen(false);
+    } else if (folderPaneOpen) {
+      setFolderPaneOpen(false);
+    }
+  }
+
+  return (
+    <main className={`mail-shell ${folderPaneOpen ? "folders-open" : ""} ${detailOpen ? "detail-open" : ""}`} onTouchStart={recordTouchStart} onTouchEnd={handleTouchEnd}>
+      <aside className="rail" aria-label="App navigation">
+        <button className="icon-button active" aria-label="Mail"><Mail size={20} /></button>
+        <button className="icon-button" aria-label="Notifications"><Bell size={20} /></button>
+        <button className="icon-button" aria-label="Settings"><Settings size={20} /></button>
+      </aside>
+
+      <section className="folder-pane" aria-label="Mailbox folders">
+        <div className="pane-header">
+          <button className="icon-button compact" aria-label="Close folders" onClick={() => setFolderPaneOpen(false)}><X size={18} /></button>
+          <div>
+            <h1>Email</h1>
+            <p>{status}</p>
+          </div>
+        </div>
+
+        <div className="account-stack">
+          {accounts.map((account) => (
+            <button className={`account-row ${account.status} ${account.id === activeAccountId ? "selected-account" : ""}`} key={account.id} onClick={() => setActiveAccountId(account.id)}>
+              <span className="account-dot" />
+              <span>
+                <strong>{account.accountLabel}</strong>
+                <small>{account.displayAddress}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <nav className="folder-list">
+          {folders.map((folder) => (
+            <button className={folder.id === activeFolderId ? "selected" : ""} key={folder.id} onClick={() => selectFolder(folder.id)}>
+              {isInboxFolder(folder) ? <Inbox size={17} /> : <Archive size={17} />}
+              <span>{folder.displayName}</span>
+              <small>{folder.unreadCount || folder.messageCount}</small>
+            </button>
+          ))}
+        </nav>
+      </section>
+
+      <section className="message-pane" aria-label="Message list">
+        <header className="topbar">
+          <button className="icon-button compact mobile-only" aria-label="Folders" onClick={() => setFolderPaneOpen(true)}><Menu size={18} /></button>
+          <form className="search-box" onSubmit={submitSearch}>
+            <Search size={18} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search local mail" aria-label="Search local mail" />
+          </form>
+          <button className="icon-button compact" aria-label="Refresh" onClick={() => void loadMessages()}><RefreshCw size={18} /></button>
+        </header>
+
+        <div className="list-title">
+          <div>
+            <h2>{query.trim() ? "Search" : activeFolder?.displayName || "Mailbox"}</h2>
+            <p>{messages.length} local messages</p>
+          </div>
+          <span>{unreadCount} unread</span>
+        </div>
+
+        <div className="message-list">
+          {messages.map((message) => (
+            <button className={`message-row ${message.id === activeMessageId ? "active" : ""} ${message.isRead ? "read" : "unread"}`} key={message.id} onClick={() => selectMessage(message.id)}>
+              <span className="read-marker" />
+              <span className="message-main">
+                <span className="message-meta">
+                  <strong>{message.sender}</strong>
+                  <time>{formatTime(message.receivedAt)}</time>
+                </span>
+                <span className="subject-line">{message.subject}</span>
+                <span className="message-foot">
+                  {message.attachmentCount ? <Paperclip size={14} /> : <Star size={14} />}
+                  {message.attachmentCount ? `${message.attachmentCount} attachment metadata` : message.bodyState}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <article className="reading-pane" aria-label="Message detail">
+        <header className="reading-actions">
+          <button className="icon-button compact mobile-only" aria-label="Back to messages" onClick={() => setDetailOpen(false)}><ChevronLeft size={18} /></button>
+          <button className="icon-button compact" aria-label="Open message" title="Open message"><MailOpen size={18} /></button>
+          <button className="icon-button compact" aria-label="Mark read" title="Mark read" onClick={() => void setActiveReadState(true)}><CheckCheck size={18} /></button>
+          <button className="icon-button compact" aria-label="Mark unread" title="Mark unread" onClick={() => void setActiveReadState(false)}><Mail size={18} /></button>
+          <button className="icon-button compact" aria-label="Archive placeholder" title="Archive requires remote write scope"><Archive size={18} /></button>
+          <button className="icon-button compact danger" aria-label="Delete locally" title="Remove locally" onClick={() => void deleteActiveMessage()}><Trash2 size={18} /></button>
+        </header>
+        {activeMessage ? (
+          <div className="message-detail">
+            <p className="provider-chip">{activeMessage.provider}</p>
+            <h2>{activeMessage.subject}</h2>
+            <div className="sender-card">
+              <div className="avatar">{initials(activeMessage.sender)}</div>
+              <div>
+                <strong>{activeMessage.sender}</strong>
+                <p>{activeMessage.senderAddress || "bounded sender"}</p>
+              </div>
+              <time>{new Date(activeMessage.receivedAt).toLocaleString()}</time>
+            </div>
+            <section className="safe-preview">
+              <ShieldAlert size={18} />
+              <div>
+                <strong>Local mailbox cache</strong>
+                <p>Read/unread and delete are local actions. Remote mailbox writes require a separate Outlook write scope.</p>
+              </div>
+            </section>
+            <p className="body-placeholder">{activeMessage.bodyText || activeMessage.bodyExcerpt || "No local body text cached for this message."}</p>
+            {activeMessage.attachments.length > 0 ? (
+              <div className="attachment-list">
+                {activeMessage.attachments.map((attachment) => (
+                  <div className="attachment-row" key={attachment.id}>
+                    <Paperclip size={15} />
+                    <span>{attachment.filename}</span>
+                    <small>{formatBytes(attachment.sizeBytes)} / {attachment.availabilityState}</small>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="empty-detail">Select a message</div>
+        )}
+      </article>
+    </main>
+  );
+}
+
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, { ...init, headers: { accept: "application/json", ...(init?.headers || {}) } });
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function initials(value: string) {
+  return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "M";
+}
+
+function formatBytes(value: number | null) {
+  if (!value) {
+    return "unknown size";
+  }
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${Math.round(value / 1024)} KB`;
+  }
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function compareFolders(a: FolderSummary, b: FolderSummary) {
+  return folderPriority(a) - folderPriority(b) || a.displayName.localeCompare(b.displayName);
+}
+
+function folderPriority(folder: FolderSummary) {
+  if (isInboxFolder(folder)) {
+    return 0;
+  }
+  const id = folder.providerFolderId.toLowerCase();
+  const name = folder.displayName.toLowerCase();
+  if (id.includes("focused") || name === "chat") {
+    return 1;
+  }
+  if (id.includes("sent") || name.includes("sent") || name === "\u5df2\u53d1\u9001\u90ae\u4ef6") {
+    return 2;
+  }
+  if (id.includes("draft") || name.includes("draft") || name === "\u8349\u7a3f") {
+    return 3;
+  }
+  if (id.includes("archive") || name.includes("archive") || name === "\u5b58\u6863") {
+    return 4;
+  }
+  if (id.includes("deleted") || name.includes("deleted") || name === "\u5df2\u5220\u9664\u90ae\u4ef6") {
+    return 5;
+  }
+  return 10;
+}
+
+function isInboxFolder(folder: FolderSummary) {
+  return folder.folderType === "inbox" || folder.providerFolderId.toLowerCase() === "inbox" || folder.displayName === "\u6536\u4ef6\u7bb1";
+}
+
+function applyHostAppearance() {
+  const params = new URLSearchParams(window.location.search);
+  const theme = params.get("pluginTheme");
+  const fontSize = params.get("pluginFontSize");
+  if (theme && ["dark", "light"].includes(theme)) {
+    document.documentElement.dataset.theme = theme;
+  }
+  if (fontSize && ["small", "default", "large", "xlarge", "xxlarge"].includes(fontSize)) {
+    document.documentElement.dataset.fontSize = fontSize;
+  }
+}

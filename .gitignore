@@ -1,0 +1,17 @@
+.env
+*.env
+*.secret
+*token*.json
+*client_secret*.json
+secrets/
+data/
+runtime/
+logs/
+tmp/
+node_modules/
+__pycache__/
+.venv/
+dist/
+build/
+.agent-context/archive/
+

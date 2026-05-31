@@ -1,0 +1,323 @@
+# Email Plugin Handoff
+
+## Current Status - 2026-05-31
+
+- Workspace initialized manually because the referenced Agent initialization script was not present at `C:\Users\xuxin\Documents\Agent\scripts\powershell\initialize-workspace-context.ps1`.
+- Workspace path: `C:\Users\xuxin\Documents\email`.
+- Initial project docs created:
+  - `docs/DOCS_INDEX.md`
+  - `docs/REQUIREMENTS.md`
+  - `docs/ARCHITECTURE.md`
+  - `docs/IMPLEMENTATION_PLAN.md`
+  - `docs/MCP_CONTRACT.md`
+  - `docs/SECURITY_PRIVACY.md`
+  - `docs/PROVIDER_CONFIG_RULES.md`
+  - `docs/HERMES_PLUGIN_HOST_CONTRACT.md`
+  - `docs/HARNESS_AND_DOCS_RULES.md`
+- Root `AGENTS.md` created with startup, architecture, documentation, Harness, Git/GitHub, and privacy rules.
+- Initial reusable connector seed copied:
+  - `connectors/outlook-graph/outlook_graph_mcp.py`
+  - Source: Hermes Mobile `scripts/python/outlook_graph_mcp.py`
+  - No token, `.env`, runtime state, mailbox data, attachment, or log was copied.
+- `.gitignore` added to block secrets, local data, runtime state, logs, dependencies, and build outputs.
+- First implementation slice added:
+  - Node/TypeScript + React/Vite foundation.
+  - SQLite schema/migration runner under `store/`.
+  - Account/folder/message repositories with duplicate-safe message upsert.
+  - Privacy-bounded message projection and query service under `service/`.
+  - Read-only MCP glue helpers under `mcp/`.
+  - Outlook-style local UI shell under `web/`, using synthetic metadata only.
+  - Focused tests under `tests/`.
+- Outlook/Hotmail Graph integration scaffold added:
+  - TypeScript Graph client under `connectors/outlook-graph/`.
+  - Email plugin-owned device-code auth scripts:
+    - `npm run outlook:auth:start`
+    - `npm run outlook:auth:finish`
+    - `npm run outlook:auth:status`
+  - Full-folder sync script:
+    - `npm run sync:outlook`
+  - Single-pass delta sync script:
+    - `npm run sync:outlook:delta`
+  - Polling runner:
+    - `npm run poll:outlook`
+    - default interval: 180 seconds;
+    - override with `EMAIL_OUTLOOK_POLL_SECONDS`.
+  - Local database default:
+    - `runtime/data/mail.sqlite`
+  - Token store default:
+    - `runtime/secrets/outlook-graph/token.json`
+  - Sync currently stores folder/message metadata, sanitized body text, and attachment metadata. Attachment binary download is not enabled.
+  - Sync is resumable from stored Graph next links in `mail_sync_cursors`.
+  - Delta polling uses Graph `messages/delta`, stores `graph-delta-link`, and marks removed messages as local tombstones.
+  - Outlook message webhooks are intentionally not used for V1; Hermes Mobile notifications should be generated from local bounded projection after sync.
+- Outlook polling status:
+  - `npm run poll:outlook` started in a background process on 2026-05-31.
+  - Poll interval is 180 seconds.
+  - Logs:
+    - `runtime/outlook-poll.out.log`
+    - `runtime/outlook-poll.err.log`
+  - First poll cycle completed:
+    - foldersSeen: 12;
+    - pagesSeen: 31;
+    - messagesUpserted: 198;
+    - messagesRemoved: 0;
+    - attachmentMetadataSeen: 43.
+  - All 12 folder cursors are now stored as `graph-delta-link`.
+- Local Email service/UI integration:
+  - `npm run service` starts one local service process that serves the built UI/API and runs Outlook delta polling.
+  - The same service now also runs AliMail IMAP polling.
+  - Service URL:
+    - local: `http://127.0.0.1:5175/`;
+    - LAN: `http://192.168.10.108:5175/` when the host keeps the same LAN IP.
+  - Service host/port defaults:
+    - `EMAIL_SERVICE_HOST=0.0.0.0`;
+    - `EMAIL_SERVICE_PORT=5175`.
+  - Service polling defaults:
+    - Outlook: `EMAIL_OUTLOOK_POLL_SECONDS=180`;
+    - AliMail: `EMAIL_ALIMAIL_POLL_SECONDS=300`;
+    - Gmail: `EMAIL_GMAIL_POLL_SECONDS=300` after Gmail OAuth is configured and authorized;
+    - AliMail per-folder fetch limit: `EMAIL_ALIMAIL_SYNC_LIMIT=500`.
+  - Service logs:
+    - `runtime/email-service.out.log`;
+    - `runtime/email-service.err.log`.
+  - UI now reads real local SQLite data from `runtime/data/mail.sqlite` through read-only APIs:
+    - `/api/accounts`;
+    - `/api/folders`;
+    - `/api/messages`;
+    - `/api/messages/:id`.
+  - Local action APIs added:
+    - `PATCH /api/messages/:id/read` for local read/unread state;
+    - `DELETE /api/messages/:id` for local delete tombstone.
+  - These actions write `mail_actions` audit rows and do not perform remote Outlook mailbox writes. Remote mark-read/delete/archive requires a separate `Mail.ReadWrite` authorization decision.
+  - UI now supports:
+    - desktop Outlook-style folder/message/detail panes;
+    - mobile folder drawer;
+    - mobile message detail view with back navigation;
+    - right-swipe back gesture on mobile:
+      - from message detail back to message list;
+      - from folder drawer back to message list;
+    - toolbar buttons for open, mark read, mark unread, archive placeholder, and local delete;
+    - default folder ordering with `收件箱` first.
+  - Browser smoke check passed on `http://127.0.0.1:5175/`:
+    - default folder is `收件箱`;
+    - 100 local messages render in the list;
+    - message detail renders cached body text and metadata-only attachment state;
+    - no horizontal overflow at desktop width.
+  - Chrome direct verification on `http://192.168.10.108:5175/` passed:
+    - desktop title: `收件箱`;
+    - desktop rows: 100;
+    - detail opened for first message;
+    - mark read/unread toggled local UI state;
+    - mobile folder drawer opened;
+    - mobile message detail opened;
+    - mobile right-swipe back gesture closed detail and folder drawer;
+    - no console errors.
+- Windows autostart:
+  - Scheduled task name: `EmailPluginService`.
+  - Trigger: current Windows user logon.
+  - Action: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\xuxin\Documents\email\scripts\powershell\start-email-service.ps1 -WorkspacePath C:\Users\xuxin\Documents\email`.
+  - Run level: limited/current user.
+  - Startup helper avoids starting a duplicate `node.exe` service process when one is already running.
+- AliMail / Qifan IMAP status:
+  - `imapflow` dependency added.
+  - `mailparser` dependency added for MIME body parsing.
+  - Connector files:
+    - `connectors/alimail/alimail-config.ts`;
+    - `connectors/alimail/alimail-imap-client.ts`.
+  - Service files:
+    - `service/alimail-message-normalizer.ts`;
+    - `service/alimail-sync-service.ts`.
+  - Scripts:
+    - `npm run alimail:auth:status`;
+    - `npm run sync:alimail`.
+  - Local config template created:
+    - `runtime/config/alimail.json`.
+  - Local credentials template created:
+    - `runtime/secrets/alimail/credentials.json`.
+  - Current diagnostic:
+    - host: `imap.qiye.aliyun.com`;
+    - port: 993;
+    - TLS: true;
+    - usernameConfigured: true;
+    - connected: true;
+    - mailboxCount: 5.
+  - Low-level IMAP LOGIN check returned `OK LOGIN completed`.
+  - User explicitly supplied the AliMail application password in the chat. It was written only to `runtime/secrets/alimail/credentials.json`; do not copy it to docs, handoff, tests, logs, or prompts.
+  - Current sync result:
+    - account: `alimail-qifan-primary`;
+    - foldersSeen: 5;
+    - messagesSeen: 124;
+    - foldersChanged: 3;
+    - local database: `runtime/data/mail.sqlite`.
+  - Local folder summary after sync:
+    - `INBOX`: remote 176, unread 158, local synced 110;
+    - `垃圾邮件`: remote 15, unread 15, local synced 5;
+    - `已发送`: remote 9, local synced 9;
+    - `草稿`: 0;
+    - `已删除邮件`: 0.
+  - Chrome verification passed:
+    - UI shows two accounts: Qifan work mail and Outlook;
+    - Qifan account opens `INBOX`;
+    - 100 local messages render;
+    - first message detail body is readable parsed text, not base64/MIME source;
+    - no horizontal overflow.
+  - AliMail polling is integrated into `npm run service`; first service poll after restart completed with:
+    - foldersSeen: 5;
+    - messagesSeen: 0;
+    - foldersChanged: 0.
+  - SMTP/send/reply is not enabled.
+  - No old Hermes password/app-password was copied; only the owner account address was located from Hermes config, and the current application password was supplied by the user for this workspace.
+  - Microsoft app registration may be reused by supplying its `client_id`; old Hermes token, `.env`, and client-secret files were not read or copied.
+- Outlook/Hotmail sync run completed for account `xuxinxp@hotmail.com`:
+  - local database: `runtime/data/mail.sqlite`;
+  - accounts: 1;
+  - folders: 12;
+  - messages: 11829;
+  - message bodies cached as sanitized/indexed text: 11829;
+  - attachment metadata rows: 2879;
+  - local unread messages: 241;
+  - attachment binary files were not downloaded.
+  - Folder coverage from the final metadata check:
+    - `收件箱`: remote 11028, local 11028;
+    - `已发送邮件`: remote 703, local 703;
+    - `草稿`: remote 23, local 23;
+    - `存档`: remote 11, local 11;
+    - `垃圾邮件`: remote 10, local 10;
+    - `cHAT`: remote 32, local 32;
+    - `已删除邮件`: remote folder count 24, Graph messages endpoint returned/local stored 22;
+    - empty folders: `Conversation History`, `RSS 源`, `Scheduled`, `发件箱`, `同步问题`.
+- Gmail read-only integration scaffold added:
+  - Config template:
+    - `runtime/config/gmail.json`.
+  - Token store:
+    - `runtime/secrets/gmail/token.json`.
+  - Desktop OAuth client secret store:
+    - `runtime/secrets/gmail/client-secret.json`.
+  - Scripts:
+    - `npm run gmail:auth:start`;
+    - `npm run gmail:auth:finish`;
+    - `npm run gmail:auth:status`;
+    - `npm run sync:gmail`.
+  - Connector files:
+    - `connectors/gmail/gmail-config.ts`;
+    - `connectors/gmail/gmail-api-client.ts`;
+    - `connectors/gmail/types.ts`.
+  - Service files:
+    - `service/gmail-message-normalizer.ts`;
+    - `service/gmail-sync-service.ts`.
+  - Scope:
+    - `https://www.googleapis.com/auth/gmail.readonly`.
+  - Gmail polling is integrated into `npm run service`.
+  - Current status:
+    - Gmail OAuth completed for `xuxinxp@gmail.com`;
+    - the user supplied a new Google OAuth `clientId`;
+    - the user pointed to a Desktop file containing the required client secret; it was copied only into the Email plugin excluded secret store;
+    - no legacy Hermes Google token was read or copied.
+  - OAuth note:
+    - Device flow works for TV / limited-input clients;
+    - the current Desktop client uses browser localhost callback and requires a client secret for token exchange.
+  - First Gmail sync completed:
+    - foldersSeen: 21;
+    - foldersChanged: 7;
+    - messagesSeen: 425;
+    - attachmentMetadataSeen: 5.
+  - Gmail folder-count fix:
+    - `users.labels.list` did not provide reliable message/unread counts, so Gmail sync now calls `users.labels.get` for visible labels before writing local folders;
+    - refreshed Gmail folder API shows `INBOX` messageCount 726 and unreadCount 189;
+    - UI folder badge shows unread count when nonzero, so Gmail `INBOX` displays 189 rather than total 726.
+  - Chrome verification passed:
+    - UI shows Gmail account `xuxinxp@gmail.com`;
+    - Gmail `INBOX` renders 100 local messages;
+    - no console errors.
+  - Gmail remote writes, send/reply, archive, delete, mark-read, and attachment binary download are not enabled.
+- Multi-user/Hermes Mobile authorization clarification:
+  - The current local instance is an administrator bootstrap instance and is not yet a production multi-user authorization model.
+  - Future Hermes Mobile integration must treat the owner/admin as one user among many, not as the global mailbox reader.
+  - Required production model:
+    - host-verified Hermes user/workspace launch context;
+    - short-lived Email plugin session;
+    - mailbox accounts bound to plugin user ids;
+    - UI/API/MCP filtering by allowed account ids;
+    - admin bounded health/status views separated from message-body and attachment access;
+    - audit for account binding, reconnect, disable, delegation, and write actions.
+  - Implemented in this slice:
+    - schema tables: `plugin_users`, `user_mail_accounts`, `plugin_sessions`;
+    - `AuthorizationService` with `local-admin` bootstrap context and Hermes launch sessions;
+    - `GET /api/v1/hermes/plugin/manifest`;
+    - `POST /api/v1/hermes/plugin/workspaces` with owner-key authorization;
+    - `POST /api/v1/hermes/plugin/launch`;
+    - owner key local path: `runtime/secrets/hermes/owner-key.txt`;
+    - workspace config/key output under registered root `.hermes-email/`;
+    - server-side account filtering for `/api/accounts`, `/api/folders`, `/api/messages`, message detail, and local read/delete APIs;
+    - focused authorization tests showing a member launch session cannot read another account.
+    - manifest/provisioning tests showing registration and launch do not return the raw workspace key.
+    - iframe query appearance support for `pluginTheme` and `pluginFontSize`;
+    - iframe `postMessage` navigation and `hermes.plugin.back` handling.
+  - Bounded smoke for `weixin_test_1`:
+    - registration returned `ok=true` and `status=active`;
+    - `.hermes-email/config.json` exists;
+    - `.hermes-email/access-key.txt` exists;
+    - workspace-key launch returned a short-lived token with `expires_in=300`;
+    - launch entry included theme/font query parameters;
+    - registration/launch responses did not include the raw workspace key.
+  - Chrome embed smoke:
+    - `pluginTheme=dark` and `pluginFontSize=large` applied to root DOM attributes;
+    - iframe emitted `email.plugin.navigation`;
+    - no raw key/token/mail body was used in postMessage.
+  - Still pending before production multi-user use:
+    - user-facing account binding/reconnect/disable flows;
+    - admin bounded health view that is separate from mailbox-content access;
+    - MCP tools must be wired to the same authorization context.
+  - Updated docs:
+    - `docs/ARCHITECTURE.md`;
+    - `docs/SECURITY_PRIVACY.md`;
+    - `docs/HERMES_PLUGIN_HOST_CONTRACT.md`;
+    - `docs/MCP_CONTRACT.md`;
+    - `docs/IMPLEMENTATION_PLAN.md`.
+- Verification:
+  - `npm run build` passed.
+  - `npm run test` passed with 10 test files and 16 tests.
+  - Browser smoke check passed at desktop width 1365 and mobile width 390 with no horizontal overflow.
+
+## Current Objective
+
+Design an independent local Email / Mailbox plugin that:
+
+- connects to approved Gmail, Outlook/Hotmail, and later QQ/IMAP mailboxes;
+- syncs mail into a local store;
+- provides a local web UI;
+- exposes bounded MCP tools for Hermes Mobile analysis and automation;
+- can be embedded in Hermes Mobile as a plugin without moving mailbox business logic into Hermes Mobile.
+
+## Not Yet Done
+
+- Git repository has not been initialized in this workspace.
+- Runtime foundation has been selected as Node/TypeScript + React/Vite. Node `node:sqlite` is used for the initial SQLite harness and is experimental in Node 24.
+- Initial local database schema has been implemented, but cursor/deletion/action workflows still need broader service coverage.
+- Existing Microsoft app `client_id` was reused from old Hermes-side config and stored in excluded `runtime/config/outlook-graph.json`. Token state is Email-plugin-owned under excluded `runtime/secrets/outlook-graph/token.json`.
+- Gmail connector scaffold is implemented and Gmail OAuth/sync has completed for `xuxinxp@gmail.com`.
+- Qifan/AliMail and Gmail provider rules have been documented.
+- Outlook Graph connector still needs refactoring from direct MCP client into provider + sync-service shape.
+- No Hermes Mobile plugin manifest or launch endpoint exists yet.
+- Hermes Mobile plugin host cooperation rules are now documented, including manifest, launch, same-origin proxy, `postMessage` navigation/back, refresh-required events, and theme/font inheritance.
+
+## Next Steps
+
+1. Decide whether to request Outlook `Mail.ReadWrite` for remote mark-read/delete/archive, or keep these actions local-only.
+2. Add local bounded notification projection for Hermes Mobile after delta sync.
+3. Add UI loading/error states and folder/message pagination beyond the first 100 rows.
+4. Investigate the `已删除邮件` folder count discrepancy: remote folder metadata says 24, Graph messages endpoint returned 22.
+5. Add folder/message pagination beyond the first 100 rows so all AliMail remote messages can be browsed from UI.
+6. Add Gmail `history.list` incremental sync after the first read-only sync is validated.
+7. Improve provider polling serialization or SQLite busy handling so manual sync does not conflict with the background service.
+8. Add Hermes Mobile plugin manifest/launch integration; follow `docs/HERMES_PLUGIN_HOST_CONTRACT.md`.
+9. Add user-facing account binding/reconnect/disable flows and admin bounded health view.
+10. Wire MCP tools to the same authorization context.
+11. Add stricter postMessage origin allowlist once Hermes Mobile provides the final host/proxy origins.
+
+## Operational Constraints
+
+- Do not store raw secrets or full email content in handoff/docs/logs.
+- Write operations such as delete, archive, move, mark read, send, or reply must be explicit, audited, and idempotent.
+- Sending or replying should not be part of V1 unless separately approved.
+- Hermes Mobile integration should use MCP and embedded plugin UI. Hermes Mobile should not directly own mailbox credentials or sync logic.
