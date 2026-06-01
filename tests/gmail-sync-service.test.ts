@@ -50,5 +50,102 @@ describe("GmailSyncService", () => {
     expect(db.prepare("SELECT provider, subject, is_read FROM mail_messages").get()).toEqual({ provider: "gmail", subject: "Gmail hello", is_read: 0 });
     expect(db.prepare("SELECT indexed_text FROM mail_message_bodies").get()).toEqual({ indexed_text: "hello body" });
     expect(db.prepare("SELECT filename FROM mail_attachments").get()).toEqual({ filename: "file.pdf" });
+    expect(db.prepare("SELECT cursor, cursor_type FROM mail_sync_cursors WHERE folder_id = 'gmail-folder-INBOX'").get()).toEqual({ cursor: "1", cursor_type: "gmail-history-id" });
+  });
+
+  it("uses Gmail history cursor for background incremental sync without rescanning label pages", async () => {
+    const db = openMailDatabase();
+    runMigrations(db);
+    const config = { accountId: "gmail-primary", accountLabel: "Gmail" } as GmailRuntimeConfig;
+    const now = new Date().toISOString();
+    db.prepare(
+      "INSERT INTO mail_accounts (id, provider, display_address, account_label, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run("gmail-primary", "gmail", "user@gmail.example", "Gmail", "connected", now, now);
+    db.prepare(
+      "INSERT INTO mail_folders (id, account_id, provider_folder_id, display_name, folder_type, message_count, unread_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run("gmail-folder-INBOX", "gmail-primary", "INBOX", "INBOX", "inbox", 0, 0, now);
+    db.prepare(
+      "INSERT INTO mail_sync_cursors (account_id, folder_id, cursor, cursor_type, updated_at) VALUES (?, ?, ?, ?, ?)"
+    ).run("gmail-primary", "gmail-folder-INBOX", "10", "gmail-history-id", now);
+    let listMessagesCalls = 0;
+    const fakeClient = {
+      async getProfile() {
+        return { emailAddress: "user@gmail.example", messagesTotal: 2, threadsTotal: 2, historyId: "12" };
+      },
+      async listLabels() {
+        return [{ id: "INBOX", name: "INBOX", type: "system" }];
+      },
+      async getLabel() {
+        return { id: "INBOX", name: "INBOX", type: "system", messagesTotal: 2, messagesUnread: 1 };
+      },
+      async listMessagesPage() {
+        listMessagesCalls += 1;
+        return { messages: [], nextPageToken: null };
+      },
+      async listHistoryPage() {
+        return {
+          history: [{ id: "11", messagesAdded: [{ message: { id: "gmail-2", threadId: "thread-2" } }] }],
+          historyId: "12",
+          nextPageToken: null
+        };
+      },
+      async getMessage() {
+        return {
+          id: "gmail-2",
+          threadId: "thread-2",
+          labelIds: ["INBOX"],
+          internalDate: String(new Date("2026-06-01T00:00:00.000Z").getTime()),
+          payload: {
+            mimeType: "text/plain",
+            headers: [
+              { name: "Subject", value: "Incremental Gmail" },
+              { name: "From", value: "Sender <sender@example.local>" }
+            ],
+            body: { data: Buffer.from("incremental body").toString("base64url"), size: 16 }
+          }
+        };
+      }
+    } as unknown as GmailApiClient;
+
+    const summary = await new GmailSyncService(config, fakeClient, db).syncIncremental();
+
+    expect(summary).toMatchObject({ syncMode: "history", foldersSeen: 1, messagesSeen: 1, foldersChanged: 1 });
+    expect(listMessagesCalls).toBe(0);
+    expect(db.prepare("SELECT subject FROM mail_messages").get()).toEqual({ subject: "Incremental Gmail" });
+    expect(db.prepare("SELECT cursor FROM mail_sync_cursors WHERE folder_id = 'gmail-folder-INBOX'").get()).toEqual({ cursor: "12" });
+  });
+
+  it("seeds Gmail history cursor quickly when no incremental cursor exists", async () => {
+    const db = openMailDatabase();
+    runMigrations(db);
+    const config = { accountId: "gmail-primary", accountLabel: "Gmail" } as GmailRuntimeConfig;
+    let listMessagesCalls = 0;
+    const fakeClient = {
+      async getProfile() {
+        return { emailAddress: "user@gmail.example", messagesTotal: 2, threadsTotal: 2, historyId: "20" };
+      },
+      async listLabels() {
+        return [{ id: "INBOX", name: "INBOX", type: "system" }];
+      },
+      async getLabel() {
+        return { id: "INBOX", name: "INBOX", type: "system", messagesTotal: 2, messagesUnread: 1 };
+      },
+      async listMessagesPage() {
+        listMessagesCalls += 1;
+        return { messages: [], nextPageToken: null };
+      },
+      async listHistoryPage() {
+        throw new Error("should not read history before seeding cursor");
+      },
+      async getMessage() {
+        throw new Error("should not fetch messages before seeding cursor");
+      }
+    } as unknown as GmailApiClient;
+
+    const summary = await new GmailSyncService(config, fakeClient, db).syncIncremental();
+
+    expect(summary).toMatchObject({ syncMode: "history-seeded", foldersSeen: 1, messagesSeen: 0 });
+    expect(listMessagesCalls).toBe(0);
+    expect(db.prepare("SELECT cursor FROM mail_sync_cursors WHERE folder_id = 'gmail-folder-INBOX'").get()).toEqual({ cursor: "20" });
   });
 });

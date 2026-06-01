@@ -301,6 +301,56 @@ Design an independent local Email / Mailbox plugin that:
 - exposes bounded MCP tools for Hermes Mobile analysis and automation;
 - can be embedded in Hermes Mobile as a plugin without moving mailbox business logic into Hermes Mobile.
 
+## Latest Update - 2026-06-02
+
+- Optimized first-load behavior affected by heavy Gmail background polling.
+- Gmail service polling now calls `GmailSyncService.syncIncremental()` instead of the older bounded `syncAll()` full label scan.
+- Gmail incremental sync uses the Gmail read-only `users.history.list` API after a local `gmail-history-id` cursor is available.
+- If no Gmail history cursor exists, the service seeds the cursor from `/users/me/profile` and returns quickly; manual `npm run sync:gmail` remains the explicit bounded full backfill path.
+- Gmail history cursor is stored on the local Gmail INBOX folder cursor row to satisfy the existing folder foreign-key schema without a migration.
+- UI message loading now has an explicit loading/error/empty state and request sequencing so stale responses do not overwrite the current folder/account view.
+- Account/folder/message first-load paths now show foreground loading placeholders; the message pane displays `正在加载邮件...` while the local cache request is still in flight instead of presenting a blank list.
+- New tests cover:
+  - full Gmail sync writes the history cursor;
+  - background incremental sync uses history without calling `listMessagesPage`;
+  - missing history cursor seeding is fast and does not fetch message pages.
+- Verification:
+  - `npm run check` passed: build plus 10 test files / 18 tests.
+  - Chrome delayed-message-API smoke passed: loading placeholder displayed before rows rendered, then 100 rows appeared with no console errors or horizontal overflow.
+
+## NAS Deployment Attempt - 2026-06-02
+
+- Local version prepared for NAS production:
+  - commit `be50c44` / `优化邮箱首屏加载与 Gmail 增量同步`;
+  - includes explicit dev dependency `@types/mailparser` so clean NAS installs can run TypeScript checks.
+- NAS source sync completed:
+  - target: `/volume1/docker/email-plugin/source`;
+  - backup: `/volume1/docker/email-plugin/backups/be50c44-20260602-073922/source-before.tar.gz`;
+  - excluded runtime data, secrets, logs, local database, and `node_modules`.
+- NAS source validation passed:
+  - `npm ci --include=dev`;
+  - `npm run check`;
+  - result: build passed; 10 test files / 18 tests passed.
+- Runtime activation is blocked by NAS Docker permissions:
+  - production port `127.0.0.1:5175` is owned by Docker container `43047bb0e2fd6fb88ddac7b4370d17e2eda233280d50400a831c45e5c6f5cc4d`;
+  - current SSH user can write `/volume1/docker/email-plugin/source` but cannot access `/var/run/docker.sock`;
+  - `sudo -n` requires a password;
+  - admin SSH keys available in this Windows profile did not authenticate.
+- Current served runtime is still old:
+  - `http://127.0.0.1:5175/` on NAS serves old assets `index-BAhGEUL2.js` and `index-BhgKWaKi.css`, not the new `index-BnhkI33t.js` / `index-CVSZe0zP.css`.
+- Required remaining action:
+  - rebuild/recreate or restart the Email plugin Docker container with admin/Container Manager permission so it runs the synced `be50c44` source/dist.
+- Changed files:
+  - `connectors/gmail/types.ts`
+  - `connectors/gmail/gmail-api-client.ts`
+  - `service/gmail-sync-service.ts`
+  - `scripts/email-service.ts`
+  - `web/src/ui/App.tsx`
+  - `web/src/styles.css`
+  - `tests/gmail-sync-service.test.ts`
+  - `docs/IMPLEMENTATION_PLAN.md`
+  - `.agent-context/HANDOFF.md`
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.

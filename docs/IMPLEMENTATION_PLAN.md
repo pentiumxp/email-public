@@ -43,6 +43,8 @@ Done in first implementation slice:
     - Outlook default interval: 180 seconds, override with `EMAIL_OUTLOOK_POLL_SECONDS`;
     - AliMail default interval: 300 seconds, override with `EMAIL_ALIMAIL_POLL_SECONDS`;
     - Gmail default interval after authorization: 300 seconds, override with `EMAIL_GMAIL_POLL_SECONDS`;
+    - Gmail service polling uses Gmail `users.history.list` after a local history cursor exists, avoiding repeated full label-page scans during normal background polling;
+    - Gmail incremental history page limit override: `EMAIL_GMAIL_HISTORY_PAGE_LIMIT` (default 20);
     - AliMail per-folder fetch limit override: `EMAIL_ALIMAIL_SYNC_LIMIT`.
 - AliMail / Qifan IMAP connector scaffold:
   - `imapflow` IMAP client;
@@ -163,6 +165,7 @@ Implement:
 - search; initial local metadata search complete.
 - local read/unread and local delete tombstone actions; initial version complete.
 - sync status/error state.
+- first-load account/folder/message loading placeholders so the UI does not show an empty gap while local cache requests are still in flight.
 
 UI posture:
 
@@ -242,7 +245,8 @@ Gmail:
 - Gmail sync maps labels to local folders and caches message text plus attachment metadata only. Attachment binary download, remote writes, send, reply, delete, archive, and mark-read are not enabled.
 - First Gmail sync completed with 21 labels, 425 messages, and 5 attachment metadata rows.
 - Gmail label counts are read from `users.labels.get`; `users.labels.list` alone does not include reliable `messagesTotal/messagesUnread` counts for the UI folder badges.
-- Incremental history/cursor strategy still needs a later Gmail `history.list` implementation; the current service polls bounded label pages and relies on idempotent local upsert.
+- Gmail background polling now uses `users.history.list` with the read-only scope after seeding a local history cursor. This keeps few-minute polling lightweight and avoids the older repeated scan of every visible label page.
+- `sync:gmail` still performs an explicit bounded full label sync for manual catch-up/backfill. The long-running service uses the incremental history path.
 
 Qifan / AliMail IMAP:
 

@@ -25,6 +25,31 @@ export interface GmailMessageListPage {
   nextPageToken: string | null;
 }
 
+export interface GmailHistoryPage {
+  history: GmailHistoryRecord[];
+  historyId: string | null;
+  nextPageToken: string | null;
+}
+
+export interface GmailHistoryRecord {
+  id: string;
+  messagesAdded?: GmailHistoryMessageRef[];
+  messagesDeleted?: GmailHistoryMessageRef[];
+  labelsAdded?: GmailHistoryLabelRef[];
+  labelsRemoved?: GmailHistoryLabelRef[];
+}
+
+export interface GmailHistoryMessageRef {
+  message: {
+    id: string;
+    threadId?: string;
+  };
+}
+
+export interface GmailHistoryLabelRef extends GmailHistoryMessageRef {
+  labelIds?: string[];
+}
+
 export interface GmailMessage {
   id: string;
   threadId: string;

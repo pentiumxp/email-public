@@ -245,6 +245,22 @@ p {
   margin-bottom: 18px;
 }
 
+.pane-placeholder {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-radius: 6px;
+  color: #667085;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+:root[data-theme="dark"] .pane-placeholder {
+  color: #d4d4d4;
+  background: #111111;
+}
+
 .account-row,
 .folder-list button,
 .message-row {
@@ -374,6 +390,31 @@ p {
 
 .message-list {
   overflow: auto;
+}
+
+.list-empty {
+  display: grid;
+  gap: 6px;
+  padding: 28px 18px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.list-empty strong {
+  color: #20242c;
+  font-size: 14px;
+}
+
+.list-empty span {
+  line-height: 1.45;
+}
+
+:root[data-theme="dark"] .list-empty {
+  color: #d4d4d4;
+}
+
+:root[data-theme="dark"] .list-empty strong {
+  color: #ffffff;
 }
 
 .message-row {

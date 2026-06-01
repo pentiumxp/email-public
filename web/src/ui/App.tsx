@@ -58,13 +58,18 @@ export function App() {
   const [activeMessage, setActiveMessage] = useState<MessageDetail | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Loading local mailbox");
+  const [accountState, setAccountState] = useState<"loading" | "idle" | "error">("loading");
+  const [folderState, setFolderState] = useState<"loading" | "idle" | "error">("loading");
+  const [listState, setListState] = useState<"idle" | "loading" | "error">("loading");
   const [folderPaneOpen, setFolderPaneOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const messageRequestSeq = useRef(0);
 
   const activeFolder = useMemo(() => folders.find((folder) => folder.id === activeFolderId), [activeFolderId, folders]);
   const unreadCount = useMemo(() => messages.filter((message) => !message.isRead).length, [messages]);
   const isEmbedded = useMemo(() => new URLSearchParams(window.location.search).get("embed") === "hermes", []);
+  const listStatusText = listState === "loading" ? LOADING_MESSAGES_LABEL : `${messages.length} local messages`;
 
   useEffect(() => {
     applyHostAppearance();
@@ -129,35 +134,83 @@ export function App() {
   }, [activeMessageId]);
 
   async function loadAccounts() {
-    const payload = await fetchJson<{ accounts: AccountSummary[] }>("/api/accounts");
-    setAccounts(payload.accounts);
-    if (payload.accounts[0]) {
-      setActiveAccountId(payload.accounts[0].id);
+    setAccountState("loading");
+    setFolderState("loading");
+    setListState("loading");
+    try {
+      const payload = await fetchJson<{ accounts: AccountSummary[] }>("/api/accounts");
+      setAccounts(payload.accounts);
+      if (payload.accounts[0]) {
+        setActiveAccountId(payload.accounts[0].id);
+      } else {
+        setFolderState("idle");
+        setListState("idle");
+      }
+      setAccountState("idle");
+      setStatus(payload.accounts.length ? "Connected to local SQLite mail store" : "No local accounts found");
+    } catch (error) {
+      setAccountState("error");
+      setFolderState("error");
+      setListState("error");
+      setStatus(error instanceof Error ? error.message : "Account list failed to load");
     }
-    setStatus(payload.accounts.length ? "Connected to local SQLite mail store" : "No local accounts found");
   }
 
   async function loadFolders(accountId: string) {
-    const payload = await fetchJson<{ folders: FolderSummary[] }>(`/api/folders?accountId=${encodeURIComponent(accountId)}`);
-    const sorted = [...payload.folders].sort(compareFolders);
-    setFolders(sorted);
-    const inbox = sorted.find(isInboxFolder) || sorted[0];
-    if (inbox) {
-      setActiveFolderId(inbox.id);
+    setFolderState("loading");
+    setFolders([]);
+    setMessages([]);
+    setActiveFolderId("");
+    setActiveMessageId("");
+    setListState("loading");
+    try {
+      const payload = await fetchJson<{ folders: FolderSummary[] }>(`/api/folders?accountId=${encodeURIComponent(accountId)}`);
+      const sorted = [...payload.folders].sort(compareFolders);
+      setFolders(sorted);
+      setFolderState("idle");
+      const inbox = sorted.find(isInboxFolder) || sorted[0];
+      if (inbox) {
+        setActiveFolderId(inbox.id);
+      } else {
+        setListState("idle");
+      }
+    } catch (error) {
+      setFolderState("error");
+      setListState("error");
+      setStatus(error instanceof Error ? error.message : "Folder list failed to load");
     }
   }
 
   async function loadMessages(searchQuery = query) {
+    const requestId = ++messageRequestSeq.current;
+    setListState("loading");
+    if (!searchQuery.trim() && !activeFolderId) {
+      return;
+    }
     const params = new URLSearchParams({ limit: "100" });
     if (searchQuery.trim()) {
       params.set("query", searchQuery.trim());
     } else if (activeFolderId) {
       params.set("folderId", activeFolderId);
     }
-    const payload = await fetchJson<{ messages: MessageSummary[] }>(`/api/messages?${params.toString()}`);
-    setMessages(payload.messages);
-    setActiveMessageId(payload.messages[0]?.id || "");
-    setDetailOpen(false);
+    try {
+      const payload = await fetchJson<{ messages: MessageSummary[] }>(`/api/messages?${params.toString()}`);
+      if (requestId !== messageRequestSeq.current) {
+        return;
+      }
+      setMessages(payload.messages);
+      setActiveMessageId(payload.messages[0]?.id || "");
+      setDetailOpen(false);
+      setListState("idle");
+    } catch (error) {
+      if (requestId !== messageRequestSeq.current) {
+        return;
+      }
+      setMessages([]);
+      setActiveMessageId("");
+      setListState("error");
+      setStatus(error instanceof Error ? error.message : "Message list failed to load");
+    }
   }
 
   async function loadMessage(messageId: string) {
@@ -254,7 +307,11 @@ export function App() {
         </div>
 
         <div className="account-stack">
-          {accounts.map((account) => (
+          {accountState === "loading" ? (
+            <div className="pane-placeholder">Loading accounts</div>
+          ) : accountState === "error" ? (
+            <div className="pane-placeholder">Account list failed to load</div>
+          ) : accounts.map((account) => (
             <button className={`account-row ${account.status} ${account.id === activeAccountId ? "selected-account" : ""}`} key={account.id} onClick={() => setActiveAccountId(account.id)}>
               <span className="account-dot" />
               <span>
@@ -266,7 +323,11 @@ export function App() {
         </div>
 
         <nav className="folder-list">
-          {folders.map((folder) => (
+          {folderState === "loading" ? (
+            <div className="pane-placeholder">Loading folders</div>
+          ) : folderState === "error" ? (
+            <div className="pane-placeholder">Folder list failed to load</div>
+          ) : folders.map((folder) => (
             <button className={folder.id === activeFolderId ? "selected" : ""} key={folder.id} onClick={() => selectFolder(folder.id)}>
               {isInboxFolder(folder) ? <Inbox size={17} /> : <Archive size={17} />}
               <span>{folder.displayName}</span>
@@ -289,13 +350,22 @@ export function App() {
         <div className="list-title">
           <div>
             <h2>{query.trim() ? "Search" : activeFolder?.displayName || "Mailbox"}</h2>
-            <p>{messages.length} local messages</p>
+            <p>{listStatusText}</p>
           </div>
           <span>{unreadCount} unread</span>
         </div>
 
         <div className="message-list">
-          {messages.map((message) => (
+          {listState === "loading" ? (
+            <div className="list-empty">
+              <strong>{LOADING_MESSAGES_LABEL}</strong>
+              <span>Background sync can continue while the local cache is opening.</span>
+            </div>
+          ) : listState === "error" ? (
+            <div className="list-empty">Message list failed to load</div>
+          ) : messages.length === 0 ? (
+            <div className="list-empty">No local messages in this view</div>
+          ) : messages.map((message) => (
             <button className={`message-row ${message.id === activeMessageId ? "active" : ""} ${message.isRead ? "read" : "unread"}`} key={message.id} onClick={() => selectMessage(message.id)}>
               <span className="read-marker" />
               <span className="message-main">
@@ -362,6 +432,8 @@ export function App() {
     </main>
   );
 }
+
+const LOADING_MESSAGES_LABEL = "\u6b63\u5728\u52a0\u8f7d\u90ae\u4ef6...";
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, headers: { accept: "application/json", ...(init?.headers || {}) } });

@@ -26,7 +26,7 @@ const outlookPollSeconds = Number(process.env.EMAIL_OUTLOOK_POLL_SECONDS || 180)
 const aliMailPollSeconds = Number(process.env.EMAIL_ALIMAIL_POLL_SECONDS || 300);
 const gmailPollSeconds = Number(process.env.EMAIL_GMAIL_POLL_SECONDS || 300);
 const aliMailSyncLimit = Number(process.env.EMAIL_ALIMAIL_SYNC_LIMIT || 500);
-const gmailSyncLimit = Number(process.env.EMAIL_GMAIL_SYNC_LIMIT || 100);
+const gmailHistoryPageLimit = Number(process.env.EMAIL_GMAIL_HISTORY_PAGE_LIMIT || 20);
 const staticRoot = process.env.EMAIL_SERVICE_STATIC_ROOT || join(process.cwd(), "dist", "web");
 
 const server = createEmailHttpServer({ databasePath: outlookConfig.databasePath, staticRoot });
@@ -98,7 +98,7 @@ async function runGmailPollLoop() {
   while (true) {
     const startedAt = new Date().toISOString();
     try {
-      const summary = await new GmailSyncService(gmailConfig, client, db).syncAll(gmailSyncLimit);
+      const summary = await new GmailSyncService(gmailConfig, client, db).syncIncremental(gmailHistoryPageLimit);
       console.log(JSON.stringify({ event: "service_gmail_poll_complete", startedAt, completedAt: new Date().toISOString(), ...summary }));
     } catch (error) {
       console.error(JSON.stringify({

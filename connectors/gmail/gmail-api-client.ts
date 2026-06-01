@@ -4,7 +4,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { setTimeout as sleep } from "node:timers/promises";
 import { assertGmailClientId, GMAIL_SCOPES, type GmailRuntimeConfig, writeJsonFile } from "./gmail-config";
-import type { GmailAuthStatus, GmailLabel, GmailMessage, GmailMessageListPage, GmailProfile } from "./types";
+import type { GmailAuthStatus, GmailHistoryPage, GmailLabel, GmailMessage, GmailMessageListPage, GmailProfile } from "./types";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -171,6 +171,23 @@ export class GmailApiClient {
     const payload = await this.gmailGet("/users/me/messages", params);
     return {
       messages: (payload.messages || []) as GmailMessageListPage["messages"],
+      nextPageToken: typeof payload.nextPageToken === "string" ? payload.nextPageToken : null
+    };
+  }
+
+  async listHistoryPage(startHistoryId: string, pageToken?: string | null, maxResults = 100): Promise<GmailHistoryPage> {
+    const params: Record<string, string> = {
+      startHistoryId,
+      maxResults: String(maxResults),
+      historyTypes: "messageAdded"
+    };
+    if (pageToken) {
+      params.pageToken = pageToken;
+    }
+    const payload = await this.gmailGet("/users/me/history", params);
+    return {
+      history: (payload.history || []) as GmailHistoryPage["history"],
+      historyId: typeof payload.historyId === "string" ? payload.historyId : null,
       nextPageToken: typeof payload.nextPageToken === "string" ? payload.nextPageToken : null
     };
   }
