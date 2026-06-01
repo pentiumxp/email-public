@@ -24,8 +24,8 @@
 }
 
 :root[data-theme="dark"] {
-  color: #e5e7eb;
-  background: #111827;
+  color: #f5f5f5;
+  background: #050505;
 }
 
 * {
@@ -54,16 +54,16 @@ input {
 :root[data-theme="dark"] .message-pane,
 :root[data-theme="dark"] .reading-pane,
 :root[data-theme="dark"] .message-row {
-  background: #111827;
-  color: #e5e7eb;
+  background: #050505;
+  color: #f5f5f5;
 }
 
 :root[data-theme="dark"] .folder-pane,
 :root[data-theme="dark"] .search-box,
 :root[data-theme="dark"] .account-row,
 :root[data-theme="dark"] .attachment-row {
-  background: #1f2937;
-  color: #e5e7eb;
+  background: #171717;
+  color: #f5f5f5;
 }
 
 :root[data-theme="dark"] .subject-line,
@@ -75,7 +75,86 @@ input {
 :root[data-theme="dark"] .message-row.active,
 :root[data-theme="dark"] .folder-list button:hover,
 :root[data-theme="dark"] .folder-list button.selected {
-  background: #243b55;
+  background: #262626;
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .rail,
+:root[data-theme="dark"] .avatar {
+  background: #000000;
+}
+
+:root[data-theme="dark"] .icon-button:hover,
+:root[data-theme="dark"] .icon-button.active {
+  background: #333333;
+}
+
+:root[data-theme="dark"] .icon-button.compact {
+  color: #f5f5f5;
+}
+
+:root[data-theme="dark"] .icon-button.compact:hover {
+  background: #2f2f2f;
+}
+
+:root[data-theme="dark"] .account-row.selected-account {
+  outline: 1px solid #ffffff;
+}
+
+:root[data-theme="dark"] .account-dot {
+  background: #ffffff;
+}
+
+:root[data-theme="dark"] .account-row.needs-auth .account-dot {
+  background: #bdbdbd;
+}
+
+:root[data-theme="dark"] .message-row.unread .read-marker,
+:root[data-theme="dark"] .message-row.active .read-marker {
+  background: #ffffff;
+}
+
+:root[data-theme="dark"] .pane-header p,
+:root[data-theme="dark"] .list-title p,
+:root[data-theme="dark"] .account-row small,
+:root[data-theme="dark"] .sender-card p,
+:root[data-theme="dark"] .safe-preview p,
+:root[data-theme="dark"] .message-foot,
+:root[data-theme="dark"] .message-meta time,
+:root[data-theme="dark"] .sender-card time,
+:root[data-theme="dark"] .attachment-row small,
+:root[data-theme="dark"] .empty-detail {
+  color: #bdbdbd;
+}
+
+:root[data-theme="dark"] .folder-pane,
+:root[data-theme="dark"] .message-pane,
+:root[data-theme="dark"] .reading-pane,
+:root[data-theme="dark"] .topbar,
+:root[data-theme="dark"] .list-title,
+:root[data-theme="dark"] .reading-actions,
+:root[data-theme="dark"] .sender-card,
+:root[data-theme="dark"] .attachment-row {
+  border-color: #2f2f2f;
+}
+
+:root[data-theme="dark"] .provider-chip {
+  background: #2f2f2f;
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .safe-preview {
+  border-color: #737373;
+  background: #171717;
+}
+
+:root[data-theme="dark"] .body-placeholder {
+  color: #eeeeee;
+}
+
+:root[data-theme="dark"] .list-title span,
+:root[data-theme="dark"] .folder-list button.selected {
+  color: #ffffff;
 }
 
 .rail {
