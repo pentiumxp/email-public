@@ -318,28 +318,34 @@ Design an independent local Email / Mailbox plugin that:
   - `npm run check` passed: build plus 10 test files / 18 tests.
   - Chrome delayed-message-API smoke passed: loading placeholder displayed before rows rendered, then 100 rows appeared with no console errors or horizontal overflow.
 
-## NAS Deployment Attempt - 2026-06-02
+## NAS Deployment - 2026-06-02
 
-- Local version prepared for NAS production:
-  - commit `be50c44` / `优化邮箱首屏加载与 Gmail 增量同步`;
-  - includes explicit dev dependency `@types/mailparser` so clean NAS installs can run TypeScript checks.
+- Deployed local version to NAS production:
+  - code commit `c1fd6f5` / `优化邮箱首屏加载与 Gmail 增量同步`;
+  - includes tracked `Dockerfile` and explicit dev dependency `@types/mailparser` so clean NAS installs can run TypeScript checks.
 - NAS source sync completed:
   - target: `/volume1/docker/email-plugin/source`;
-  - backup: `/volume1/docker/email-plugin/backups/be50c44-20260602-073922/source-before.tar.gz`;
+  - final backup: `/volume1/docker/email-plugin/backups/c1fd6f5-20260602-074459/source-before.tar.gz`;
+  - earlier source backup from the first attempt: `/volume1/docker/email-plugin/backups/be50c44-20260602-073922/source-before.tar.gz`;
   - excluded runtime data, secrets, logs, local database, and `node_modules`.
-- NAS source validation passed:
-  - `npm ci --include=dev`;
-  - `npm run check`;
-  - result: build passed; 10 test files / 18 tests passed.
-- Runtime activation is blocked by NAS Docker permissions:
-  - production port `127.0.0.1:5175` is owned by Docker container `43047bb0e2fd6fb88ddac7b4370d17e2eda233280d50400a831c45e5c6f5cc4d`;
-  - current SSH user can write `/volume1/docker/email-plugin/source` but cannot access `/var/run/docker.sock`;
-  - `sudo -n` requires a password;
-  - admin SSH keys available in this Windows profile did not authenticate.
-- Current served runtime is still old:
-  - `http://127.0.0.1:5175/` on NAS serves old assets `index-BAhGEUL2.js` and `index-BhgKWaKi.css`, not the new `index-BnhkI33t.js` / `index-CVSZe0zP.css`.
-- Required remaining action:
-  - rebuild/recreate or restart the Email plugin Docker container with admin/Container Manager permission so it runs the synced `be50c44` source/dist.
+- NAS validation:
+  - `npm ci --include=dev` passed;
+  - `npm run check` passed before container rebuild: build passed; 10 test files / 18 tests passed;
+  - Docker image rebuild from `/volume1/docker/email-plugin/source` passed.
+- Docker runtime activation completed:
+  - old image tagged as `email-plugin:backup-before-c1fd6f5-20260602-074523`;
+  - container replaced with ID prefix `0b38f5d59df9`;
+  - image tag: `email-plugin:local`;
+  - port mapping: `127.0.0.1:5175->5175/tcp`;
+  - runtime volume preserved: `/volume1/docker/email-plugin/runtime:/data`.
+- NAS runtime smoke passed:
+  - `http://127.0.0.1:5175/` serves new assets `index-BnhkI33t.js` and `index-CVSZe0zP.css`;
+  - `/api/accounts` returned 3 configured accounts;
+  - `/api/messages?folderId=gmail-folder-INBOX&limit=5` returned 5 rows.
+- Provider poll status after restart:
+  - AliMail poll completed;
+  - Outlook poll completed;
+  - Gmail poll returned bounded error code `fetch failed`, matching the earlier NAS Google-network behavior seen before this deployment.
 - Changed files:
   - `connectors/gmail/types.ts`
   - `connectors/gmail/gmail-api-client.ts`
