@@ -108,6 +108,45 @@ describe("mail account quick switcher", () => {
 
     await waitFor(() => expect(document.querySelector(".refresh-banner")?.textContent).toContain("New version available"));
   });
+
+  it("keeps a tap target for loading the next 50 messages when device scroll events are unreliable", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "/api/accounts") {
+        return jsonResponse({ accounts: [account("gmail-primary", "Gmail", "user@gmail.example")] });
+      }
+      if (url.includes("/api/folders")) {
+        return jsonResponse({ folders: [folder("gmail-inbox", "gmail-primary", "INBOX")] });
+      }
+      if (url.includes("/api/messages") && url.includes("offset=0")) {
+        return jsonResponse({ messages: [message("m1")], hasMore: true, nextOffset: 50 });
+      }
+      if (url.includes("/api/messages") && url.includes("offset=50")) {
+        return jsonResponse({ messages: [message("m2")], hasMore: false, nextOffset: 100 });
+      }
+      if (url.includes("/api/messages/m")) {
+        return jsonResponse({ message: { ...message("m1"), bodyText: "Synthetic body", attachments: [] } });
+      }
+      return jsonResponse({}, 404);
+    }));
+
+    const rootElement = document.getElementById("root");
+    if (!rootElement) {
+      throw new Error("missing root");
+    }
+    await act(async () => {
+      createRoot(rootElement).render(<App />);
+    });
+    await waitFor(() => expect(document.querySelector(".load-more-button")?.textContent).toContain("Load 50 more messages"));
+
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>(".load-more-button")?.click();
+    });
+
+    await waitFor(() => expect(requests.some((url) => url.includes("offset=50"))).toBe(true));
+  });
 });
 
 function account(id: string, accountLabel: string, displayAddress: string) {
@@ -130,6 +169,24 @@ function folder(id: string, accountId: string, displayName: string) {
     folderType: "inbox",
     messageCount: 1,
     unreadCount: 0
+  };
+}
+
+function message(id: string) {
+  return {
+    id,
+    accountId: "gmail-primary",
+    folderId: "gmail-inbox",
+    provider: "gmail",
+    providerMessageId: id,
+    subject: "Synthetic subject",
+    sender: "Sender",
+    senderAddress: "sender@example.invalid",
+    receivedAt: "2026-06-02T00:00:00.000Z",
+    snippet: "Synthetic snippet",
+    isRead: false,
+    attachmentCount: 0,
+    bodyState: "cached-text"
   };
 }
 

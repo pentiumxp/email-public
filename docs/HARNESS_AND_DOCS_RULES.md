@@ -58,6 +58,30 @@ These changes may use focused unit/UI checks:
 
 ## Focused Harness Commands
 
+Mobile UI behavior that depends on real viewport scrolling should be verified on
+the connected ADB e-ink phone through the installed Email home-screen icon when
+available. Use the LAN service URL, install it with the browser's add-to-home
+screen flow, then validate the standalone page rather than a normal browser tab.
+
+ADB mobile pagination smoke:
+
+```powershell
+adb devices -l
+adb -s <device-id> shell wm size
+adb -s <device-id> shell am start -a android.intent.action.VIEW -d "http://<lan-ip>:5175/?adbSmoke=1" org.chromium.chrome
+adb -s <device-id> forward tcp:9222 localabstract:chrome_devtools_remote
+```
+
+Expected evidence:
+
+- first message request uses `limit=50&offset=0`;
+- physical scrolling near the bottom of the message list requests
+  `limit=50&offset=50`, or the visible `Load 50 more messages` fallback button
+  does so when device scroll events are unreliable;
+- the rendered message row count grows from 50 to 100 without a blank list state;
+- no OAuth token, app password, mailbox password, full body, attachment content,
+  or long provider log is captured in screenshots, docs, or handoff.
+
 Provider outbound proxy changes must run:
 
 ```powershell

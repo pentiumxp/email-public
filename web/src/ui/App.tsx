@@ -271,7 +271,7 @@ export function App() {
 
   function maybeLoadMoreMessages(event: UIEvent<HTMLDivElement>) {
     const element = event.currentTarget;
-    if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80) {
+    if (element.scrollTop + element.clientHeight >= element.scrollHeight - 320) {
       void loadMessages({ reset: false });
     }
   }
@@ -477,7 +477,13 @@ export function App() {
               ))}
               {messageHasMore || listAppendState !== "idle" ? (
                 <div className="load-more-status">
-                  {listAppendState === "loading" ? "Loading 50 more messages" : listAppendState === "error" ? "More messages failed to load" : "Scroll for 50 more messages"}
+                  {listAppendState === "loading" ? (
+                    <span>Loading 50 more messages</span>
+                  ) : (
+                    <button type="button" className="load-more-button" onClick={() => void loadMessages({ reset: false })} disabled={!messageHasMore}>
+                      {listAppendState === "error" ? "Retry loading 50 more messages" : "Load 50 more messages"}
+                    </button>
+                  )}
                 </div>
               ) : null}
             </>

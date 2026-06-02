@@ -499,6 +499,29 @@ Design an independent local Email / Mailbox plugin that:
     - scrolling message list to the bottom requested `limit=50&offset=50` and appended to 100 rows;
     - no console errors.
 
+## Mobile Home-Screen Entry Harness - 2026-06-02
+
+- Added a browser-installable app manifest for the local Email UI:
+  - `web/public/manifest.webmanifest`;
+  - `web/public/icons/email-icon.svg`;
+  - `web/index.html` links the manifest, icon, and black/white theme metadata.
+- Purpose:
+  - ADB phone UI checks should use the Email home-screen icon / standalone entry
+    where available, not a normal browser tab with address-bar and tab state.
+- Harness docs updated:
+  - `docs/HARNESS_AND_DOCS_RULES.md` now records the connected ADB e-ink phone
+    pagination smoke flow and required bounded evidence.
+- Privacy note:
+  - the manifest and icon contain no account labels, tokens, paths, message data,
+    or runtime state.
+- Mobile pagination refinement:
+  - the bottom pagination control now includes a visible `Load 50 more messages`
+    button in addition to automatic scroll-trigger loading;
+  - the scroll trigger starts earlier near the bottom so e-ink browser viewport
+    behavior does not require hitting the exact final pixel;
+  - this reuses the existing bounded `/api/messages?limit=50&offset=...` API and
+    does not change provider sync, local storage, or mailbox credentials.
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.

@@ -1,0 +1,18 @@
+{
+  "name": "Email",
+  "short_name": "Email",
+  "description": "Local Email plugin workspace",
+  "start_url": "/?source=home-screen",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "/icons/email-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

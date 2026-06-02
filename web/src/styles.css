@@ -523,11 +523,25 @@ p {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
+  min-height: 56px;
   padding: 10px 14px;
   color: #667085;
   font-size: 12px;
   border-bottom: 1px solid #edf0f5;
+}
+
+.load-more-button {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #cfcfcf;
+  background: #ffffff;
+  color: #111111;
+  font: inherit;
+  font-weight: 650;
+}
+
+.load-more-button:disabled {
+  color: #8c8c8c;
 }
 
 :root[data-theme="dark"] .list-empty {
@@ -541,6 +555,12 @@ p {
 :root[data-theme="dark"] .load-more-status {
   color: #bdbdbd;
   border-color: #2f2f2f;
+}
+
+:root[data-theme="dark"] .load-more-button {
+  background: #111111;
+  color: #f1f1f1;
+  border-color: #4a4a4a;
 }
 
 .message-row {
