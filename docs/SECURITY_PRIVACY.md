@@ -54,6 +54,26 @@ Logs must not include:
 - raw private reports;
 - long provider response dumps.
 
+## Provider Proxy Privacy
+
+Provider proxy configuration is operational metadata, not mailbox content, but it can still contain credentials.
+
+Allowed in docs/logs:
+
+- proxy environment variable names;
+- proxy host/port when no credential is embedded;
+- redacted proxy labels such as `http://***:***@proxy.local:7890/`;
+- bounded error codes such as `UNSUPPORTED_PROXY_PROTOCOL`.
+
+Not allowed:
+
+- proxy username/password;
+- full proxy URLs containing credentials;
+- provider request headers;
+- OAuth tokens or refresh tokens observed while debugging provider connectivity.
+
+Provider proxy setup must remain server-side. It must not be sent to the browser, iframe postMessage payloads, MCP responses, or Hermes Mobile plugin manifest/launch responses.
+
 ## MCP Privacy
 
 MCP outputs should default to summaries and metadata. Full body access, attachment extraction, and send/reply operations require separate capability and audit design.

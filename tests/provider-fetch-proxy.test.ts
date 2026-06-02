@@ -54,4 +54,17 @@ describe("provider fetch proxy", () => {
   it("redacts proxy credentials in status labels", () => {
     expect(redactProxyUrl("http://user:secret@127.0.0.1:7890")).toBe("http://***:***@127.0.0.1:7890/");
   });
+
+  it("does not leak proxy credentials through configuration status", () => {
+    const status = configureProviderFetchProxyFromEnv(
+      { EMAIL_PROVIDER_PROXY_URL: "http://user:secret@proxy.local:7890" },
+      {
+        createProxyAgent: () => fakeDispatcher,
+        setGlobalDispatcher: () => undefined
+      }
+    );
+
+    expect(JSON.stringify(status)).toContain("***:***");
+    expect(JSON.stringify(status)).not.toContain("user:secret");
+  });
 });

@@ -399,6 +399,29 @@ Design an independent local Email / Mailbox plugin that:
 - Operational note:
   - because `sing-box` listens only on host loopback, do not move Email back to Docker bridge networking unless a container-reachable proxy endpoint is added.
 
+## Provider Proxy Harness And Docs - 2026-06-02
+
+- Added focused provider proxy harness command:
+  - `npm run harness:provider-proxy`.
+- Added provider proxy boundary tests:
+  - `tests/provider-proxy-boundary.test.ts`;
+  - verifies Gmail and Outlook provider clients wire through `connectors/http/provider-fetch-proxy.ts`;
+  - verifies UI, MCP read tools, HTTP routes, and Hermes plugin service do not import proxy runtime directly.
+- Extended provider proxy unit tests:
+  - credential redaction is checked through `configureProviderFetchProxyFromEnv`;
+  - unsupported proxy protocols remain rejected.
+- Extended architecture boundary tests:
+  - UI cannot import Gmail provider modules or provider proxy runtime;
+  - Hermes plugin service cannot import provider credential config or provider proxy runtime.
+- Updated docs:
+  - `docs/HARNESS_AND_DOCS_RULES.md` now classifies provider outbound HTTP proxy/runtime wiring as H2 contract coverage and records the focused harness command;
+  - `docs/ARCHITECTURE.md` now records provider outbound HTTP runtime ownership under connector modules;
+  - `docs/SECURITY_PRIVACY.md` now records proxy credential redaction rules and disallows sending proxy configuration to browser, postMessage, MCP, or manifest/launch outputs;
+  - `docs/IMPLEMENTATION_PLAN.md` now records the provider proxy harness.
+- Verification:
+  - `npm run harness:provider-proxy` passed: 3 test files / 10 tests;
+  - `npm run check` passed: build plus 12 test files / 26 tests.
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.

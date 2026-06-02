@@ -20,7 +20,8 @@
     "sync:outlook": "tsx scripts/sync-outlook.ts",
     "sync:outlook:delta": "tsx scripts/sync-outlook-delta.ts",
     "poll:outlook": "tsx scripts/poll-outlook.ts",
-    "service": "tsx scripts/email-service.ts"
+    "service": "tsx scripts/email-service.ts",
+    "harness:provider-proxy": "vitest run tests/provider-fetch-proxy.test.ts tests/provider-proxy-boundary.test.ts tests/architecture-boundary.test.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.1",

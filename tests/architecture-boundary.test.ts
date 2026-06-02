@@ -17,6 +17,16 @@ describe("architecture boundaries", () => {
     const combined = files.map((file) => readFileSync(file, "utf8")).join("\n");
     expect(combined).not.toContain("node:sqlite");
     expect(combined).not.toContain("connectors/outlook-graph");
+    expect(combined).not.toContain("connectors/gmail");
+    expect(combined).not.toContain("provider-fetch-proxy");
+  });
+
+  it("keeps Hermes plugin glue from importing provider credentials or HTTP proxy runtime", () => {
+    const source = readFileSync(join(root, "service/hermes-plugin-service.ts"), "utf8");
+    expect(source).not.toContain("gmail-config");
+    expect(source).not.toContain("outlook-config");
+    expect(source).not.toContain("alimail-config");
+    expect(source).not.toContain("provider-fetch-proxy");
   });
 });
 

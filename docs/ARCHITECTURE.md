@@ -72,6 +72,13 @@ Provider connectors normalize remote APIs into a common interface:
 
 Sending/replying is intentionally outside V1.
 
+Provider outbound HTTP runtime:
+
+- Shared provider fetch proxy setup lives in `connectors/http/provider-fetch-proxy.ts`.
+- Provider clients that call Gmail, Microsoft Graph, or other HTTPS APIs should install this runtime inside connector-owned code.
+- UI, MCP, HTTP routes, and Hermes plugin services should not import `ProxyAgent`, `setGlobalDispatcher`, provider token config, or provider proxy setup directly.
+- Node `fetch` proxy behavior is treated as connector runtime infrastructure, not as a UI or host integration concern.
+
 ## Local Store Boundary
 
 The store should expose repository-style APIs and hide SQL from business services:
@@ -200,6 +207,7 @@ Current foundation decision:
 - SQLite through Node's `node:sqlite` API for the first local-store harness. This API is currently experimental in Node 24, so a later hardening pass may pin a stable SQLite package if needed.
 - The copied Outlook Graph Python connector remains a reference/seed until it is refactored or ported into a normalized provider connector.
 - Microsoft OAuth app registration can be shared with the existing Hermes-side connector by reusing the app `client_id`. Runtime tokens remain separate in the Email plugin's excluded `runtime/secrets/` store.
+- Provider HTTPS clients use `undici` proxy runtime support when configured through Email-specific or standard proxy environment variables. This keeps NAS/Hermes local proxy reuse inside connector runtime code.
 
 Pragmatic path:
 

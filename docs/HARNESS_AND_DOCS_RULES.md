@@ -35,6 +35,7 @@ These changes require contract/projection tests:
 - account/folder/message projection into UI;
 - privacy-bounded output projection;
 - provider error normalization.
+- provider outbound HTTP proxy/runtime wiring.
 
 ### H3: Focused Tests Usually Enough
 
@@ -55,6 +56,27 @@ These changes may use focused unit/UI checks:
 - architecture boundary tests;
 - privacy scan or equivalent secret-pattern check.
 
+## Focused Harness Commands
+
+Provider outbound proxy changes must run:
+
+```powershell
+npm run harness:provider-proxy
+```
+
+This command covers:
+
+- proxy environment precedence and redacted status output;
+- unsupported proxy protocol rejection;
+- Gmail and Outlook provider clients wiring through `connectors/http/provider-fetch-proxy.ts`;
+- boundary checks that UI, MCP, HTTP routes, and Hermes plugin glue do not import provider proxy runtime directly.
+
+Full completion still requires:
+
+```powershell
+npm run check
+```
+
 ## Architecture Boundary Guard
 
 Add tests that assert:
@@ -66,6 +88,7 @@ Add tests that assert:
 - connector code does not import UI or Hermes Mobile host code;
 - Hermes integration does not import provider secret/token modules.
 - plugin host bridge code does not import mailbox provider credentials or local mail store internals directly.
+- provider outbound proxy setup stays in provider connector/runtime modules, not UI, MCP, HTTP routes, or Hermes plugin glue.
 
 ## Documentation Update Rule
 

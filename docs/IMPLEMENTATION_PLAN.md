@@ -249,6 +249,9 @@ Gmail:
 - Gmail background polling now uses `users.history.list` with the read-only scope after seeding a local history cursor. This keeps few-minute polling lightweight and avoids the older repeated scan of every visible label page.
 - `sync:gmail` still performs an explicit bounded full label sync for manual catch-up/backfill. The long-running service uses the incremental history path.
 - Gmail and Outlook provider clients now install the shared provider fetch proxy runtime during client construction. This is required in NAS deployments where Hermes/Codex use a local proxy wrapper because Node fetch does not automatically honor proxy environment variables.
+- Focused provider proxy harness is available:
+  - `npm run harness:provider-proxy`;
+  - validates proxy precedence/redaction, unsupported protocol rejection, provider-client wiring, and boundary separation from UI/MCP/Hermes glue.
 
 Qifan / AliMail IMAP:
 
