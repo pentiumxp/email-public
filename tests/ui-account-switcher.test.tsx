@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -58,6 +60,12 @@ describe("mail account quick switcher", () => {
     });
 
     await waitFor(() => expect(requests.some((url) => url.includes("accountId=outlook-hotmail-primary"))).toBe(true));
+  });
+
+  it("uses a three-slot width so the first three accounts fit on one screen", () => {
+    const css = readFileSync(join(process.cwd(), "web/src/styles.css"), "utf8");
+    expect(css).toContain("flex: 1 0 calc((100% - 16px) / 3);");
+    expect(css).toContain("flex-basis: calc((100% - 16px) / 3);");
   });
 });
 

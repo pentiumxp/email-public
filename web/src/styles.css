@@ -404,13 +404,14 @@ p {
 
 .quick-account {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 6px;
   align-items: center;
-  flex: 0 0 min(190px, 46vw);
+  flex: 1 0 calc((100% - 16px) / 3);
+  max-width: 220px;
   height: 42px;
   min-width: 0;
-  padding: 6px 8px;
+  padding: 6px;
   border: 1px solid #d9dee7;
   border-radius: 6px;
   background: #ffffff;
@@ -425,8 +426,8 @@ p {
 }
 
 .quick-account-avatar {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -750,7 +751,24 @@ p {
   }
 
   .quick-account {
-    flex-basis: min(210px, 72vw);
+    grid-template-columns: 24px minmax(0, 1fr);
+    flex-basis: calc((100% - 16px) / 3);
+    max-width: none;
+    padding: 6px 5px;
+  }
+
+  .quick-account-avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
+
+  .quick-account strong {
+    font-size: 11px;
+  }
+
+  .quick-account small {
+    font-size: 10px;
   }
 
   .mobile-only {

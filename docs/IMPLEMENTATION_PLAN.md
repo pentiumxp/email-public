@@ -167,7 +167,7 @@ Implement:
 - local read/unread and local delete tombstone actions; initial version complete.
 - sync status/error state.
 - first-load account/folder/message loading placeholders so the UI does not show an empty gap while local cache requests are still in flight.
-- first-level message page includes a horizontal account quick switcher, so users can switch Gmail / Qifan / Outlook accounts without opening the folder navigation drawer.
+- first-level message page includes a three-slot account quick switcher, so the current Gmail / Qifan / Outlook accounts fit in one screen without opening the folder navigation drawer or horizontally scrolling.
 
 UI posture:
 
@@ -183,7 +183,7 @@ Tests:
 - message list handles empty/loading/error;
 - message detail does not overflow mixed Chinese/English content;
 - destructive actions are visually distinct and confirmed.
-- first-level account quick switcher renders available accounts and switches the active account without opening the folder drawer; initial jsdom coverage added.
+- first-level account quick switcher renders available accounts and switches the active account without opening the folder drawer; initial jsdom coverage and three-slot width guard added.
 
 ## Phase 6: Hermes Mobile Plugin Integration
 

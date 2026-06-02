@@ -443,6 +443,22 @@ Design an independent local Email / Mailbox plugin that:
     - desktop 1365x820: quick switcher visible, account click switched the active account, no horizontal overflow, no console errors;
     - mobile 390x820: 3 quick account buttons visible, no horizontal overflow, no console errors.
 
+## UI Account Quick Switcher Fit Refinement - 2026-06-02
+
+- Adjusted the first-level account quick switcher so the current 3 accounts fit on one screen without horizontal scrolling:
+  - quick account buttons use a three-slot basis `calc((100% - 16px) / 3)`;
+  - mobile button layout uses a smaller avatar and font sizing while preserving truncation;
+  - additional accounts beyond 3 may still overflow horizontally.
+- Extended UI harness:
+  - `tests/ui-account-switcher.test.tsx` now asserts the three-slot CSS guard;
+  - `.codegraph/.gitignore` now ignores local `*.pid` runtime files.
+- Verification:
+  - `npx vitest run tests/ui-account-switcher.test.tsx` passed: 2 tests;
+  - `npm run check` passed: build plus 13 test files / 28 tests;
+  - Chrome smoke passed on `http://127.0.0.1:5175/`:
+    - desktop 1365x820: 3 account buttons visible, switcher width 439, scrollWidth 439, no switcher scroll, no page overflow;
+    - mobile 390x820: 3 account buttons visible at 118px each, switcher width 390, scrollWidth 390, no switcher scroll, no page overflow.
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.
