@@ -371,10 +371,8 @@ export function App() {
               aria-pressed={account.id === activeAccountId}
               title={account.displayAddress}
             >
-              <span className="quick-account-avatar">{accountInitial(account)}</span>
               <span className="quick-account-label">
-                <strong>{account.accountLabel}</strong>
-                <small>{account.displayAddress}</small>
+                <strong>{quickAccountLabel(account)}</strong>
               </span>
             </button>
           ))}
@@ -484,9 +482,19 @@ function initials(value: string) {
   return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "M";
 }
 
-function accountInitial(account: AccountSummary) {
-  const source = account.accountLabel || account.displayAddress || account.provider;
-  return source.trim()[0]?.toUpperCase() || "M";
+function quickAccountLabel(account: AccountSummary) {
+  const provider = account.provider.toLowerCase();
+  const label = account.accountLabel.trim();
+  if (provider === "gmail" || label.toLowerCase().includes("gmail")) {
+    return "Gmail";
+  }
+  if (provider.includes("outlook") || provider.includes("hotmail") || label.toLowerCase().includes("hotmail") || label.toLowerCase().includes("outlook")) {
+    return "Hotmail";
+  }
+  if (provider.includes("alimail") || provider.includes("qifan") || label.toLowerCase().includes("qifan")) {
+    return "\u8d77\u51e1\u90ae\u7bb1";
+  }
+  return label || account.provider;
 }
 
 function formatBytes(value: number | null) {

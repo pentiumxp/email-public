@@ -167,7 +167,7 @@ Implement:
 - local read/unread and local delete tombstone actions; initial version complete.
 - sync status/error state.
 - first-load account/folder/message loading placeholders so the UI does not show an empty gap while local cache requests are still in flight.
-- first-level message page includes a three-slot account quick switcher, so the current Gmail / Qifan / Outlook accounts fit in one screen without opening the folder navigation drawer or horizontally scrolling.
+- first-level message page includes a three-slot account quick switcher, so the current Gmail / Qifan / Hotmail accounts fit in one screen without opening the folder navigation drawer or horizontally scrolling. The quick switcher displays mailbox type labels only, not full email addresses.
 
 UI posture:
 

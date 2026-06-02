@@ -459,6 +459,20 @@ Design an independent local Email / Mailbox plugin that:
     - desktop 1365x820: 3 account buttons visible, switcher width 439, scrollWidth 439, no switcher scroll, no page overflow;
     - mobile 390x820: 3 account buttons visible at 118px each, switcher width 390, scrollWidth 390, no switcher scroll, no page overflow.
 
+## UI Account Quick Switcher Label Refinement - 2026-06-02
+
+- Refined the first-level quick switcher labels:
+  - quick account buttons now display mailbox type labels only: `Gmail`, `起凡邮箱`, `Hotmail`;
+  - full email addresses are no longer rendered inside the quick switcher text;
+  - full addresses remain available in button `title` attributes and in the folder-pane account list.
+- Removed the quick-switcher avatar letter so labels do not visually duplicate as `G Gmail` or `H Hotmail`.
+- Verification:
+  - `npx vitest run tests/ui-account-switcher.test.tsx` passed: 2 tests;
+  - `npm run check` passed: build plus 13 test files / 28 tests;
+  - Chrome smoke passed on `http://127.0.0.1:5175/`:
+    - desktop 1365x820: quick switcher text is `Gmail起凡邮箱Hotmail`, no `@`, no switcher scroll, no page overflow;
+    - mobile 390x820: quick switcher text is `Gmail起凡邮箱Hotmail`, no `@`, no switcher scroll, no page overflow.
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.

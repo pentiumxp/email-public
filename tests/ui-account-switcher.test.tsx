@@ -51,6 +51,8 @@ describe("mail account quick switcher", () => {
     await waitFor(() => expect(document.querySelector(".quick-account-switcher")).not.toBeNull());
     expect(document.querySelector(".quick-account-switcher")?.textContent).toContain("Gmail");
     expect(document.querySelector(".quick-account-switcher")?.textContent).toContain("Hotmail");
+    expect(document.querySelector(".quick-account-switcher")?.textContent).not.toContain("user@gmail.example");
+    expect(document.querySelector(".quick-account-switcher")?.textContent).not.toContain("user@hotmail.example");
 
     const hotmailButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".quick-account"))
       .find((button) => button.textContent?.includes("Hotmail"));
