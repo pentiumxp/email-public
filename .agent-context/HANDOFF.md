@@ -422,6 +422,27 @@ Design an independent local Email / Mailbox plugin that:
   - `npm run harness:provider-proxy` passed: 3 test files / 10 tests;
   - `npm run check` passed: build plus 12 test files / 26 tests.
 
+## UI Account Quick Switcher - 2026-06-02
+
+- Added a first-level account quick switcher above the message list in the web UI:
+  - users can switch Gmail, Qifan/AliMail, and Outlook/Hotmail accounts without opening the folder navigation drawer;
+  - the folder drawer account list reuses the same `selectAccount` path to avoid state divergence;
+  - switching accounts clears search/detail state and closes mobile drawers before loading the new account folders.
+- Updated styling:
+  - horizontal scroll account switcher with stable height;
+  - long account labels and email addresses truncate inside the button;
+  - dark mode uses black/white/gray contrast, not green accents.
+- Added UI harness:
+  - `tests/ui-account-switcher.test.tsx`;
+  - Vitest now includes `tests/**/*.test.tsx`;
+  - test verifies the first-level quick switcher renders account choices and clicking an account requests that account's folder list.
+- Verification:
+  - `npx vitest run tests/ui-account-switcher.test.tsx` passed: 1 test;
+  - `npm run check` passed: build plus 13 test files / 27 tests;
+  - Chrome smoke passed on `http://127.0.0.1:5175/`:
+    - desktop 1365x820: quick switcher visible, account click switched the active account, no horizontal overflow, no console errors;
+    - mobile 390x820: 3 quick account buttons visible, no horizontal overflow, no console errors.
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.

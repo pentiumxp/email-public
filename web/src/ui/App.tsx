@@ -66,6 +66,7 @@ export function App() {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const messageRequestSeq = useRef(0);
 
+  const activeAccount = useMemo(() => accounts.find((account) => account.id === activeAccountId), [accounts, activeAccountId]);
   const activeFolder = useMemo(() => folders.find((folder) => folder.id === activeFolderId), [activeFolderId, folders]);
   const unreadCount = useMemo(() => messages.filter((message) => !message.isRead).length, [messages]);
   const isEmbedded = useMemo(() => new URLSearchParams(window.location.search).get("embed") === "hermes", []);
@@ -223,6 +224,16 @@ export function App() {
     void loadMessages(query);
   }
 
+  function selectAccount(accountId: string) {
+    if (accountId === activeAccountId) {
+      return;
+    }
+    setQuery("");
+    setDetailOpen(false);
+    setFolderPaneOpen(false);
+    setActiveAccountId(accountId);
+  }
+
   function selectFolder(folderId: string) {
     setQuery("");
     setActiveFolderId(folderId);
@@ -312,7 +323,7 @@ export function App() {
           ) : accountState === "error" ? (
             <div className="pane-placeholder">Account list failed to load</div>
           ) : accounts.map((account) => (
-            <button className={`account-row ${account.status} ${account.id === activeAccountId ? "selected-account" : ""}`} key={account.id} onClick={() => setActiveAccountId(account.id)}>
+            <button className={`account-row ${account.status} ${account.id === activeAccountId ? "selected-account" : ""}`} key={account.id} onClick={() => selectAccount(account.id)}>
               <span className="account-dot" />
               <span>
                 <strong>{account.accountLabel}</strong>
@@ -347,10 +358,32 @@ export function App() {
           <button className="icon-button compact" aria-label="Refresh" onClick={() => void loadMessages()}><RefreshCw size={18} /></button>
         </header>
 
+        <div className="quick-account-switcher" aria-label="Switch mailbox account">
+          {accountState === "loading" ? (
+            <div className="quick-account-placeholder">Loading accounts</div>
+          ) : accountState === "error" ? (
+            <div className="quick-account-placeholder">Accounts unavailable</div>
+          ) : accounts.map((account) => (
+            <button
+              className={`quick-account ${account.id === activeAccountId ? "active" : ""}`}
+              key={account.id}
+              onClick={() => selectAccount(account.id)}
+              aria-pressed={account.id === activeAccountId}
+              title={account.displayAddress}
+            >
+              <span className="quick-account-avatar">{accountInitial(account)}</span>
+              <span className="quick-account-label">
+                <strong>{account.accountLabel}</strong>
+                <small>{account.displayAddress}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+
         <div className="list-title">
           <div>
             <h2>{query.trim() ? "Search" : activeFolder?.displayName || "Mailbox"}</h2>
-            <p>{listStatusText}</p>
+            <p>{activeAccount?.accountLabel || "No account"} / {listStatusText}</p>
           </div>
           <span>{unreadCount} unread</span>
         </div>
@@ -449,6 +482,11 @@ function formatTime(value: string) {
 
 function initials(value: string) {
   return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "M";
+}
+
+function accountInitial(account: AccountSummary) {
+  const source = account.accountLabel || account.displayAddress || account.provider;
+  return source.trim()[0]?.toUpperCase() || "M";
 }
 
 function formatBytes(value: number | null) {

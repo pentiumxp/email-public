@@ -17,5 +17,5 @@
     "jsx": "react-jsx",
     "types": ["node", "vitest/globals"]
   },
-  "include": ["connectors/**/*.ts", "service/**/*.ts", "store/**/*.ts", "mcp/**/*.ts", "server/**/*.ts", "scripts/**/*.ts", "web/src/**/*.ts", "web/src/**/*.tsx", "tests/**/*.ts"]
+  "include": ["connectors/**/*.ts", "service/**/*.ts", "store/**/*.ts", "mcp/**/*.ts", "server/**/*.ts", "scripts/**/*.ts", "web/src/**/*.ts", "web/src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx"]
 }
