@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
+import { configureProviderFetchProxyFromEnv } from "../http/provider-fetch-proxy";
 import { assertOutlookClientId, OUTLOOK_SCOPES, type OutlookRuntimeConfig, writeJsonFile } from "./outlook-config";
 import type { GraphAttachment, GraphAuthStatus, GraphFolder, GraphMessageDeltaPage, GraphMessagePage } from "./types";
 
@@ -23,7 +24,9 @@ interface PendingDeviceState {
 }
 
 export class MicrosoftGraphClient {
-  constructor(private readonly config: OutlookRuntimeConfig) {}
+  constructor(private readonly config: OutlookRuntimeConfig) {
+    configureProviderFetchProxyFromEnv();
+  }
 
   authStatus(): GraphAuthStatus {
     const token = this.loadTokenState();

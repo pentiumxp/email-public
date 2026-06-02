@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { setTimeout as sleep } from "node:timers/promises";
+import { configureProviderFetchProxyFromEnv } from "../http/provider-fetch-proxy";
 import { assertGmailClientId, GMAIL_SCOPES, type GmailRuntimeConfig, writeJsonFile } from "./gmail-config";
 import type { GmailAuthStatus, GmailHistoryPage, GmailLabel, GmailMessage, GmailMessageListPage, GmailProfile } from "./types";
 
@@ -28,7 +29,9 @@ interface PendingDeviceState {
 }
 
 export class GmailApiClient {
-  constructor(private readonly config: GmailRuntimeConfig) {}
+  constructor(private readonly config: GmailRuntimeConfig) {
+    configureProviderFetchProxyFromEnv();
+  }
 
   authStatus(): GmailAuthStatus {
     const token = this.loadTokenState();

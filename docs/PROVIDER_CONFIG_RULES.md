@@ -91,6 +91,21 @@ Email plugin rules:
 - Store Gmail account status and token refresh errors as bounded metadata.
 - Do not write full Gmail message bodies into docs, handoffs, logs, or tests.
 
+Provider HTTP proxy rules:
+
+- Node `fetch` does not automatically inherit `HTTP_PROXY` / `HTTPS_PROXY` for provider API calls.
+- Provider clients that use `fetch` must install the shared proxy runtime in `connectors/http/provider-fetch-proxy.ts`.
+- Proxy source precedence is Email-specific env first, then generic shell env:
+  - `EMAIL_PROVIDER_PROXY_URL`;
+  - `EMAIL_PROVIDER_HTTPS_PROXY`;
+  - `EMAIL_HTTPS_PROXY`;
+  - `HTTPS_PROXY` / `https_proxy`;
+  - `HTTP_PROXY` / `http_proxy`;
+  - `ALL_PROXY` / `all_proxy`.
+- The current provider fetch runtime supports HTTP/HTTPS proxy URLs for `undici` `ProxyAgent`.
+- If the local proxy only listens on host loopback, a Docker bridge container cannot use `127.0.0.1`; use host networking or expose a container-reachable local proxy endpoint.
+- Logs and docs may record only redacted proxy labels and variable names, not proxy credentials.
+
 Suggested connector profile mapping:
 
 ```json

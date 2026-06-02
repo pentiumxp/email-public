@@ -357,6 +357,48 @@ Design an independent local Email / Mailbox plugin that:
   - `docs/IMPLEMENTATION_PLAN.md`
   - `.agent-context/HANDOFF.md`
 
+## NAS Provider Proxy Deployment - 2026-06-02
+
+- Investigated the NAS Google connection failure after Gmail polling returned bounded error code `fetch failed`.
+- Current NAS proxy facts:
+  - Hermes Agent runs with `HTTP_PROXY` / `HTTPS_PROXY` set to `http://127.0.0.1:7890`;
+  - `sing-box` is running on the NAS and listens only on host loopback `127.0.0.1:7890`;
+  - the previous Email Docker container used bridge networking and had no proxy environment, so it could not reach the host loopback proxy.
+- Implemented shared provider fetch proxy runtime:
+  - `connectors/http/provider-fetch-proxy.ts`;
+  - uses `undici` `ProxyAgent` for HTTP/HTTPS proxy URLs;
+  - resolves Email-specific env first, then generic `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` style variables;
+  - redacts proxy credentials in status labels.
+- Wired the proxy runtime into provider API clients:
+  - `connectors/gmail/gmail-api-client.ts`;
+  - `connectors/outlook-graph/microsoft-graph-client.ts`.
+- Added focused tests:
+  - `tests/provider-fetch-proxy.test.ts`.
+- Updated docs:
+  - `docs/PROVIDER_CONFIG_RULES.md`;
+  - `docs/IMPLEMENTATION_PLAN.md`.
+- Verification:
+  - local `npm run check` passed: build plus 11 test files / 22 tests;
+  - NAS `npm ci --include=dev` passed;
+  - NAS `npm run check` passed: build plus 11 test files / 22 tests.
+- NAS production container was rebuilt and replaced:
+  - image tag: `email-plugin:local`;
+  - new container ID prefix: `8ac1358f792c`;
+  - Docker network mode: `host`;
+  - service bind remains local-only with `EMAIL_SERVICE_HOST=127.0.0.1` and `EMAIL_SERVICE_PORT=5175`;
+  - runtime volume preserved: `/volume1/docker/email-plugin/runtime:/data`;
+  - previous image backup tag: `email-plugin:backup-before-proxy-20260602-075950`.
+- NAS runtime smoke passed:
+  - `http://127.0.0.1:5175/` returned HTTP 200;
+  - `/api/accounts` returned 3 configured accounts;
+  - `/api/messages?folderId=gmail-folder-INBOX&limit=5` returned 5 rows.
+- Gmail network verification:
+  - first service poll after proxy deployment completed with `syncMode=history-seeded`;
+  - manual incremental Gmail sync completed with `syncMode=history`;
+  - no Google `fetch failed` error appeared in the checked logs after the proxy deployment.
+- Operational note:
+  - because `sing-box` listens only on host loopback, do not move Email back to Docker bridge networking unless a container-reachable proxy endpoint is added.
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.
@@ -376,7 +418,7 @@ Design an independent local Email / Mailbox plugin that:
 3. Add UI loading/error states and folder/message pagination beyond the first 100 rows.
 4. Investigate the `已删除邮件` folder count discrepancy: remote folder metadata says 24, Graph messages endpoint returned 22.
 5. Add folder/message pagination beyond the first 100 rows so all AliMail remote messages can be browsed from UI.
-6. Add Gmail `history.list` incremental sync after the first read-only sync is validated.
+6. Monitor Gmail `history.list` incremental polling on NAS after the provider proxy deployment.
 7. Improve provider polling serialization or SQLite busy handling so manual sync does not conflict with the background service.
 8. Add Hermes Mobile plugin manifest/launch integration; follow `docs/HERMES_PLUGIN_HOST_CONTRACT.md`.
 9. Add user-facing account binding/reconnect/disable flows and admin bounded health view.

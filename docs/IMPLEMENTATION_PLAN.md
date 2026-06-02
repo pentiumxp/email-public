@@ -45,7 +45,8 @@ Done in first implementation slice:
     - Gmail default interval after authorization: 300 seconds, override with `EMAIL_GMAIL_POLL_SECONDS`;
     - Gmail service polling uses Gmail `users.history.list` after a local history cursor exists, avoiding repeated full label-page scans during normal background polling;
     - Gmail incremental history page limit override: `EMAIL_GMAIL_HISTORY_PAGE_LIMIT` (default 20);
-    - AliMail per-folder fetch limit override: `EMAIL_ALIMAIL_SYNC_LIMIT`.
+    - AliMail per-folder fetch limit override: `EMAIL_ALIMAIL_SYNC_LIMIT`;
+    - Provider `fetch` calls can use the shared `connectors/http/provider-fetch-proxy.ts` runtime with `EMAIL_PROVIDER_PROXY_URL` / `HTTPS_PROXY` style environment variables.
 - AliMail / Qifan IMAP connector scaffold:
   - `imapflow` IMAP client;
   - read-only auth diagnostic script;
@@ -247,6 +248,7 @@ Gmail:
 - Gmail label counts are read from `users.labels.get`; `users.labels.list` alone does not include reliable `messagesTotal/messagesUnread` counts for the UI folder badges.
 - Gmail background polling now uses `users.history.list` with the read-only scope after seeding a local history cursor. This keeps few-minute polling lightweight and avoids the older repeated scan of every visible label page.
 - `sync:gmail` still performs an explicit bounded full label sync for manual catch-up/backfill. The long-running service uses the incremental history path.
+- Gmail and Outlook provider clients now install the shared provider fetch proxy runtime during client construction. This is required in NAS deployments where Hermes/Codex use a local proxy wrapper because Node fetch does not automatically honor proxy environment variables.
 
 Qifan / AliMail IMAP:
 
