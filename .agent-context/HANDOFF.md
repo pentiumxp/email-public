@@ -473,6 +473,32 @@ Design an independent local Email / Mailbox plugin that:
     - desktop 1365x820: quick switcher text is `Gmail起凡邮箱Hotmail`, no `@`, no switcher scroll, no page overflow;
     - mobile 390x820: quick switcher text is `Gmail起凡邮箱Hotmail`, no `@`, no switcher scroll, no page overflow.
 
+## UI Version Refresh And Message Pagination - 2026-06-02
+
+- Added app version refresh prompt:
+  - new service module `service/app-version-service.ts` derives a bounded build version from static asset metadata or `EMAIL_PLUGIN_BUILD_VERSION`;
+  - HTTP endpoint `GET /api/app-version` returns `{ version, checkedAt }` with no token, path, or mailbox data;
+  - frontend records the initial version, checks every 60 seconds, and shows a refresh banner when the served version changes;
+  - refresh banner and account quick switcher are wrapped in a stable toolbar stack so the message list remains the final `minmax(0, 1fr)` grid row.
+- Added message-list paging:
+  - `/api/messages` default `limit` is now 50;
+  - API accepts `offset` and returns `hasMore` plus `nextOffset`;
+  - store repository methods support `LIMIT ? OFFSET ?`;
+  - frontend initial mailbox/search view loads 50 messages and scrolling to the bottom appends the next 50.
+- Added/updated harness:
+  - `tests/app-version-service.test.ts`;
+  - `tests/store.test.ts` pagination coverage;
+  - `tests/authorization-service.test.ts` bounded mailbox pagination coverage;
+  - `tests/ui-account-switcher.test.tsx` now covers version-change refresh prompt and message request limit.
+- Verification:
+  - `npx vitest run tests/app-version-service.test.ts tests/store.test.ts tests/authorization-service.test.ts tests/ui-account-switcher.test.tsx` passed: 4 test files / 11 tests;
+  - `npm run check` passed: build plus 14 test files / 33 tests;
+  - temporary current-build Chrome smoke passed on `http://127.0.0.1:5186/`:
+    - `/api/app-version` returned a bounded version string;
+    - initial Gmail message request used `limit=50&offset=0` and rendered 50 rows;
+    - scrolling message list to the bottom requested `limit=50&offset=50` and appended to 100 rows;
+    - no console errors.
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.

@@ -257,22 +257,22 @@ export class MessageRepository {
     );
   }
 
-  listRecent(limit = 50): MailMessageRecord[] {
+  listRecent(limit = 50, offset = 0): MailMessageRecord[] {
     return this.db.prepare(
       `SELECT * FROM mail_messages
        WHERE is_deleted = 0
        ORDER BY received_at DESC
-       LIMIT ?`
-    ).all(limit).map(mapMessageRow);
+       LIMIT ? OFFSET ?`
+    ).all(limit, offset).map(mapMessageRow);
   }
 
-  listByFolder(folderId: string, limit = 100): MailMessageRecord[] {
+  listByFolder(folderId: string, limit = 100, offset = 0): MailMessageRecord[] {
     return this.db.prepare(
       `SELECT * FROM mail_messages
        WHERE is_deleted = 0 AND folder_id = ?
        ORDER BY received_at DESC
-       LIMIT ?`
-    ).all(folderId, limit).map(mapMessageRow);
+       LIMIT ? OFFSET ?`
+    ).all(folderId, limit, offset).map(mapMessageRow);
   }
 
   search(query: string, limit = 50): MailMessageRecord[] {
@@ -286,7 +286,7 @@ export class MessageRepository {
     ).all(pattern, pattern, pattern, limit).map(mapMessageRow);
   }
 
-  listRecentForAccounts(accountIds: string[], limit = 50): MailMessageRecord[] {
+  listRecentForAccounts(accountIds: string[], limit = 50, offset = 0): MailMessageRecord[] {
     if (accountIds.length === 0) {
       return [];
     }
@@ -295,11 +295,11 @@ export class MessageRepository {
       `SELECT * FROM mail_messages
        WHERE is_deleted = 0 AND account_id IN (${placeholders})
        ORDER BY received_at DESC
-       LIMIT ?`
-    ).all(...accountIds, limit).map(mapMessageRow);
+       LIMIT ? OFFSET ?`
+    ).all(...accountIds, limit, offset).map(mapMessageRow);
   }
 
-  searchForAccounts(accountIds: string[], query: string, limit = 50): MailMessageRecord[] {
+  searchForAccounts(accountIds: string[], query: string, limit = 50, offset = 0): MailMessageRecord[] {
     if (accountIds.length === 0) {
       return [];
     }
@@ -311,8 +311,8 @@ export class MessageRepository {
          AND account_id IN (${placeholders})
          AND (subject LIKE ? OR sender_display LIKE ? OR sender_address_bounded LIKE ?)
        ORDER BY received_at DESC
-       LIMIT ?`
-    ).all(...accountIds, pattern, pattern, pattern, limit).map(mapMessageRow);
+       LIMIT ? OFFSET ?`
+    ).all(...accountIds, pattern, pattern, pattern, limit, offset).map(mapMessageRow);
   }
 
   countByFolder(folderId: string): number {

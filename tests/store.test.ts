@@ -58,5 +58,43 @@ describe("mail store", () => {
     expect(rows[0].subject).toBe("Updated subject");
     expect(rows[0].isRead).toBe(true);
   });
-});
 
+  it("paginates folder messages with limit and offset", () => {
+    const accounts = new AccountRepository(db);
+    const folders = new FolderRepository(db);
+    const messages = new MessageRepository(db);
+
+    accounts.upsert({
+      id: "acct-1",
+      provider: "outlook",
+      displayAddress: "outlook@example.local",
+      accountLabel: "Outlook",
+      status: "connected"
+    });
+    folders.upsert({
+      id: "folder-1",
+      accountId: "acct-1",
+      providerFolderId: "inbox",
+      displayName: "Inbox"
+    });
+    for (let index = 0; index < 55; index += 1) {
+      messages.upsert({
+        id: `msg-${index}`,
+        accountId: "acct-1",
+        folderId: "folder-1",
+        provider: "outlook",
+        providerMessageId: `provider-msg-${index}`,
+        subject: `Subject ${index}`,
+        receivedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+        isRead: false,
+        hasAttachments: false,
+        attachmentCount: 0
+      });
+    }
+
+    expect(messages.listByFolder("folder-1", 50, 0)).toHaveLength(50);
+    const next = messages.listByFolder("folder-1", 50, 50);
+    expect(next).toHaveLength(5);
+    expect(next[0].id).toBe("msg-4");
+  });
+});

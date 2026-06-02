@@ -40,6 +40,36 @@ describe("AuthorizationService", () => {
     expect(context).toMatchObject({ userId: "local-admin", mode: "bootstrap-admin" });
     expect(context.allowedAccountIds.sort()).toEqual(["acct-a", "acct-b"]);
   });
+
+  it("paginates bounded mailbox reads by offset", () => {
+    const db = openMailDatabase();
+    runMigrations(db);
+    const accounts = new AccountRepository(db);
+    const folders = new FolderRepository(db);
+    const messages = new MessageRepository(db);
+    accounts.upsert({ id: "acct-a", provider: "gmail", displayAddress: "acct-a@example.local", accountLabel: "acct-a", status: "connected" });
+    folders.upsert({ id: "folder-a", accountId: "acct-a", providerFolderId: "INBOX", displayName: "INBOX", folderType: "inbox", messageCount: 55, unreadCount: 0 });
+    for (let index = 0; index < 55; index += 1) {
+      messages.upsert({
+        id: `msg-${index}`,
+        accountId: "acct-a",
+        folderId: "folder-a",
+        provider: "gmail",
+        providerMessageId: `provider-msg-${index}`,
+        subject: `Subject ${index}`,
+        receivedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+        isRead: true,
+        hasAttachments: false,
+        attachmentCount: 0
+      });
+    }
+
+    const context = new AuthorizationService(db).ensureBootstrapAdmin();
+    expect(new MailboxReadService(db).listMessages(context, { folderId: "folder-a" })).toHaveLength(50);
+    const next = new MailboxReadService(db).listMessages(context, { folderId: "folder-a", offset: 50 });
+    expect(next).toHaveLength(5);
+    expect(next[0].id).toBe("msg-4");
+  });
 });
 
 function seedAccount(db: ReturnType<typeof openMailDatabase>, accountId: string, folderId: string, messageId: string, subject: string) {

@@ -12,6 +12,7 @@ describe("mail account quick switcher", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -35,6 +36,7 @@ describe("mail account quick switcher", () => {
         return jsonResponse({ folders: [folder("outlook-inbox", "outlook-hotmail-primary", "Inbox")] });
       }
       if (url.includes("/api/messages")) {
+        expect(url).toContain("limit=50");
         return jsonResponse({ messages: [] });
       }
       return jsonResponse({}, 404);
@@ -68,6 +70,43 @@ describe("mail account quick switcher", () => {
     const css = readFileSync(join(process.cwd(), "web/src/styles.css"), "utf8");
     expect(css).toContain("flex: 1 0 calc((100% - 16px) / 3);");
     expect(css).toContain("flex-basis: calc((100% - 16px) / 3);");
+  });
+
+  it("shows a refresh prompt when the served app version changes", async () => {
+    vi.useFakeTimers();
+    let versionChecks = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/app-version") {
+        versionChecks += 1;
+        return jsonResponse({ version: versionChecks === 1 ? "v1" : "v2" });
+      }
+      if (url === "/api/accounts") {
+        return jsonResponse({ accounts: [account("gmail-primary", "Gmail", "user@gmail.example")] });
+      }
+      if (url.includes("/api/folders")) {
+        return jsonResponse({ folders: [folder("gmail-inbox", "gmail-primary", "INBOX")] });
+      }
+      if (url.includes("/api/messages")) {
+        return jsonResponse({ messages: [], hasMore: false, nextOffset: 0 });
+      }
+      return jsonResponse({}, 404);
+    }));
+
+    const rootElement = document.getElementById("root");
+    if (!rootElement) {
+      throw new Error("missing root");
+    }
+    await act(async () => {
+      createRoot(rootElement).render(<App />);
+    });
+    await waitFor(() => expect(versionChecks).toBe(1));
+
+    await act(async () => {
+      vi.advanceTimersByTime(60000);
+    });
+
+    await waitFor(() => expect(document.querySelector(".refresh-banner")?.textContent).toContain("New version available"));
   });
 });
 

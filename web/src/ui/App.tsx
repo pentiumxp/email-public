@@ -1,5 +1,5 @@
 import { Archive, Bell, CheckCheck, ChevronLeft, Inbox, Mail, MailOpen, Menu, Paperclip, RefreshCw, Search, Settings, ShieldAlert, Star, Trash2, X } from "lucide-react";
-import type { FormEvent, TouchEvent } from "react";
+import type { FormEvent, TouchEvent, UIEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 interface AccountSummary {
@@ -61,20 +61,28 @@ export function App() {
   const [accountState, setAccountState] = useState<"loading" | "idle" | "error">("loading");
   const [folderState, setFolderState] = useState<"loading" | "idle" | "error">("loading");
   const [listState, setListState] = useState<"idle" | "loading" | "error">("loading");
+  const [listAppendState, setListAppendState] = useState<"idle" | "loading" | "error">("idle");
+  const [messageOffset, setMessageOffset] = useState(0);
+  const [messageHasMore, setMessageHasMore] = useState(false);
+  const [refreshAvailable, setRefreshAvailable] = useState(false);
   const [folderPaneOpen, setFolderPaneOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const messageRequestSeq = useRef(0);
+  const appVersion = useRef<string | null>(null);
 
   const activeAccount = useMemo(() => accounts.find((account) => account.id === activeAccountId), [accounts, activeAccountId]);
   const activeFolder = useMemo(() => folders.find((folder) => folder.id === activeFolderId), [activeFolderId, folders]);
   const unreadCount = useMemo(() => messages.filter((message) => !message.isRead).length, [messages]);
   const isEmbedded = useMemo(() => new URLSearchParams(window.location.search).get("embed") === "hermes", []);
-  const listStatusText = listState === "loading" ? LOADING_MESSAGES_LABEL : `${messages.length} local messages`;
+  const listStatusText = listState === "loading" ? LOADING_MESSAGES_LABEL : `${messages.length}${messageHasMore ? "+" : ""} local messages`;
 
   useEffect(() => {
     applyHostAppearance();
     void loadAccounts();
+    void checkAppVersion();
+    const timer = window.setInterval(() => void checkAppVersion(), APP_VERSION_CHECK_MS);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -123,7 +131,7 @@ export function App() {
   }, [activeAccountId]);
 
   useEffect(() => {
-    void loadMessages();
+    void loadMessages({ reset: true });
   }, [activeFolderId]);
 
   useEffect(() => {
@@ -157,6 +165,21 @@ export function App() {
     }
   }
 
+  async function checkAppVersion() {
+    try {
+      const payload = await fetchJson<{ version: string }>("/api/app-version");
+      if (!appVersion.current) {
+        appVersion.current = payload.version;
+        return;
+      }
+      if (payload.version !== appVersion.current) {
+        setRefreshAvailable(true);
+      }
+    } catch {
+      // Version checks should not interrupt mailbox use.
+    }
+  }
+
   async function loadFolders(accountId: string) {
     setFolderState("loading");
     setFolders([]);
@@ -182,34 +205,56 @@ export function App() {
     }
   }
 
-  async function loadMessages(searchQuery = query) {
+  async function loadMessages(input: { searchQuery?: string; reset?: boolean } = {}) {
+    const searchQuery = input.searchQuery ?? query;
+    const reset = input.reset ?? false;
     const requestId = ++messageRequestSeq.current;
-    setListState("loading");
+    const offset = reset ? 0 : messageOffset;
+    if (reset) {
+      setListState("loading");
+      setListAppendState("idle");
+      setMessageOffset(0);
+      setMessageHasMore(false);
+    } else {
+      if (listAppendState === "loading" || !messageHasMore) {
+        return;
+      }
+      setListAppendState("loading");
+    }
     if (!searchQuery.trim() && !activeFolderId) {
       return;
     }
-    const params = new URLSearchParams({ limit: "100" });
+    const params = new URLSearchParams({ limit: String(MESSAGE_PAGE_SIZE), offset: String(offset) });
     if (searchQuery.trim()) {
       params.set("query", searchQuery.trim());
     } else if (activeFolderId) {
       params.set("folderId", activeFolderId);
     }
     try {
-      const payload = await fetchJson<{ messages: MessageSummary[] }>(`/api/messages?${params.toString()}`);
+      const payload = await fetchJson<{ messages: MessageSummary[]; hasMore?: boolean; nextOffset?: number }>(`/api/messages?${params.toString()}`);
       if (requestId !== messageRequestSeq.current) {
         return;
       }
-      setMessages(payload.messages);
-      setActiveMessageId(payload.messages[0]?.id || "");
-      setDetailOpen(false);
+      setMessages((current) => reset ? payload.messages : [...current, ...payload.messages]);
+      if (reset) {
+        setActiveMessageId(payload.messages[0]?.id || "");
+        setDetailOpen(false);
+      }
+      setMessageOffset(payload.nextOffset ?? offset + payload.messages.length);
+      setMessageHasMore(Boolean(payload.hasMore));
       setListState("idle");
+      setListAppendState("idle");
     } catch (error) {
       if (requestId !== messageRequestSeq.current) {
         return;
       }
-      setMessages([]);
-      setActiveMessageId("");
-      setListState("error");
+      if (reset) {
+        setMessages([]);
+        setActiveMessageId("");
+        setListState("error");
+      } else {
+        setListAppendState("error");
+      }
       setStatus(error instanceof Error ? error.message : "Message list failed to load");
     }
   }
@@ -221,7 +266,14 @@ export function App() {
 
   function submitSearch(event: FormEvent) {
     event.preventDefault();
-    void loadMessages(query);
+    void loadMessages({ searchQuery: query, reset: true });
+  }
+
+  function maybeLoadMoreMessages(event: UIEvent<HTMLDivElement>) {
+    const element = event.currentTarget;
+    if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80) {
+      void loadMessages({ reset: false });
+    }
   }
 
   function selectAccount(accountId: string) {
@@ -355,27 +407,36 @@ export function App() {
             <Search size={18} />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search local mail" aria-label="Search local mail" />
           </form>
-          <button className="icon-button compact" aria-label="Refresh" onClick={() => void loadMessages()}><RefreshCw size={18} /></button>
+          <button className="icon-button compact" aria-label="Refresh" onClick={() => void loadMessages({ reset: true })}><RefreshCw size={18} /></button>
         </header>
 
-        <div className="quick-account-switcher" aria-label="Switch mailbox account">
-          {accountState === "loading" ? (
-            <div className="quick-account-placeholder">Loading accounts</div>
-          ) : accountState === "error" ? (
-            <div className="quick-account-placeholder">Accounts unavailable</div>
-          ) : accounts.map((account) => (
-            <button
-              className={`quick-account ${account.id === activeAccountId ? "active" : ""}`}
-              key={account.id}
-              onClick={() => selectAccount(account.id)}
-              aria-pressed={account.id === activeAccountId}
-              title={account.displayAddress}
-            >
-              <span className="quick-account-label">
-                <strong>{quickAccountLabel(account)}</strong>
-              </span>
-            </button>
-          ))}
+        <div className="message-toolbar-stack">
+          {refreshAvailable ? (
+            <section className="refresh-banner" role="status" aria-live="polite">
+              <span>New version available</span>
+              <button type="button" onClick={() => window.location.reload()}>Refresh</button>
+            </section>
+          ) : null}
+
+          <div className="quick-account-switcher" aria-label="Switch mailbox account">
+            {accountState === "loading" ? (
+              <div className="quick-account-placeholder">Loading accounts</div>
+            ) : accountState === "error" ? (
+              <div className="quick-account-placeholder">Accounts unavailable</div>
+            ) : accounts.map((account) => (
+              <button
+                className={`quick-account ${account.id === activeAccountId ? "active" : ""}`}
+                key={account.id}
+                onClick={() => selectAccount(account.id)}
+                aria-pressed={account.id === activeAccountId}
+                title={account.displayAddress}
+              >
+                <span className="quick-account-label">
+                  <strong>{quickAccountLabel(account)}</strong>
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="list-title">
@@ -386,7 +447,7 @@ export function App() {
           <span>{unreadCount} unread</span>
         </div>
 
-        <div className="message-list">
+        <div className="message-list" onScroll={maybeLoadMoreMessages}>
           {listState === "loading" ? (
             <div className="list-empty">
               <strong>{LOADING_MESSAGES_LABEL}</strong>
@@ -396,22 +457,31 @@ export function App() {
             <div className="list-empty">Message list failed to load</div>
           ) : messages.length === 0 ? (
             <div className="list-empty">No local messages in this view</div>
-          ) : messages.map((message) => (
-            <button className={`message-row ${message.id === activeMessageId ? "active" : ""} ${message.isRead ? "read" : "unread"}`} key={message.id} onClick={() => selectMessage(message.id)}>
-              <span className="read-marker" />
-              <span className="message-main">
-                <span className="message-meta">
-                  <strong>{message.sender}</strong>
-                  <time>{formatTime(message.receivedAt)}</time>
-                </span>
-                <span className="subject-line">{message.subject}</span>
-                <span className="message-foot">
-                  {message.attachmentCount ? <Paperclip size={14} /> : <Star size={14} />}
-                  {message.attachmentCount ? `${message.attachmentCount} attachment metadata` : message.bodyState}
-                </span>
-              </span>
-            </button>
-          ))}
+          ) : (
+            <>
+              {messages.map((message) => (
+                <button className={`message-row ${message.id === activeMessageId ? "active" : ""} ${message.isRead ? "read" : "unread"}`} key={message.id} onClick={() => selectMessage(message.id)}>
+                  <span className="read-marker" />
+                  <span className="message-main">
+                    <span className="message-meta">
+                      <strong>{message.sender}</strong>
+                      <time>{formatTime(message.receivedAt)}</time>
+                    </span>
+                    <span className="subject-line">{message.subject}</span>
+                    <span className="message-foot">
+                      {message.attachmentCount ? <Paperclip size={14} /> : <Star size={14} />}
+                      {message.attachmentCount ? `${message.attachmentCount} attachment metadata` : message.bodyState}
+                    </span>
+                  </span>
+                </button>
+              ))}
+              {messageHasMore || listAppendState !== "idle" ? (
+                <div className="load-more-status">
+                  {listAppendState === "loading" ? "Loading 50 more messages" : listAppendState === "error" ? "More messages failed to load" : "Scroll for 50 more messages"}
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
       </section>
 
@@ -465,6 +535,8 @@ export function App() {
 }
 
 const LOADING_MESSAGES_LABEL = "\u6b63\u5728\u52a0\u8f7d\u90ae\u4ef6...";
+const APP_VERSION_CHECK_MS = 60000;
+const MESSAGE_PAGE_SIZE = 50;
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, headers: { accept: "application/json", ...(init?.headers || {}) } });

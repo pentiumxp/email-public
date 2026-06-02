@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { MailboxReadService } from "../service/mailbox-read-service";
 import { MailboxActionService } from "../service/mailbox-action-service";
+import { AppVersionService } from "../service/app-version-service";
 import { AuthorizationService, type AuthContext } from "../service/authorization-service";
 import { bearerToken, HermesPluginService, type LaunchRequestInput, type WorkspaceRegistrationInput } from "../service/hermes-plugin-service";
 import { openMailDatabase, runMigrations } from "../store/sqlite-store";
@@ -21,9 +22,10 @@ export function createEmailHttpServer(options: EmailHttpServerOptions) {
   const actionService = new MailboxActionService(db);
   const authorizationService = new AuthorizationService(db);
   const hermesPluginService = new HermesPluginService(db, { port: options.port || Number(process.env.EMAIL_SERVICE_PORT || 5175) });
+  const appVersionService = new AppVersionService(options.staticRoot);
 
   return createServer((request, response) => {
-    void handleRequest(request, response, readService, actionService, authorizationService, hermesPluginService, options.staticRoot);
+    void handleRequest(request, response, readService, actionService, authorizationService, hermesPluginService, appVersionService, options.staticRoot);
   });
 }
 
@@ -34,12 +36,16 @@ async function handleRequest(
   actionService: MailboxActionService,
   authorizationService: AuthorizationService,
   hermesPluginService: HermesPluginService,
+  appVersionService: AppVersionService,
   staticRoot: string
 ) {
   try {
     const url = new URL(request.url || "/", "http://localhost");
     if (request.method === "GET" && url.pathname === "/api/v1/hermes/plugin/manifest") {
       return sendJson(response, hermesPluginService.manifest());
+    }
+    if (request.method === "GET" && url.pathname === "/api/app-version") {
+      return sendJson(response, appVersionService.current());
     }
     if (request.method === "POST" && url.pathname === "/api/v1/hermes/plugin/workspaces") {
       const body = await readJsonBody<WorkspaceRegistrationInput>(request);
@@ -63,12 +69,18 @@ async function handleRequest(
       return sendJson(response, { folders: readService.listFolders(context, accountId) });
     }
     if (request.method === "GET" && url.pathname === "/api/messages") {
+      const limit = Number(url.searchParams.get("limit") || 50);
+      const offset = Number(url.searchParams.get("offset") || 0);
+      const messages = readService.listMessages(context, {
+        folderId: url.searchParams.get("folderId") || undefined,
+        query: url.searchParams.get("query") || undefined,
+        limit,
+        offset
+      });
       return sendJson(response, {
-        messages: readService.listMessages(context, {
-          folderId: url.searchParams.get("folderId") || undefined,
-          query: url.searchParams.get("query") || undefined,
-          limit: Number(url.searchParams.get("limit") || 100)
-        })
+        messages,
+        hasMore: messages.length === Math.min(Math.max(limit, 1), 200),
+        nextOffset: offset + messages.length
       });
     }
     if (request.method === "GET" && url.pathname.startsWith("/api/messages/")) {

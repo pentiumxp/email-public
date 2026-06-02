@@ -27,19 +27,20 @@ export class MailboxReadService {
     return this.folders.listByAccount(accountId).map(projectFolder);
   }
 
-  listMessages(context: AuthContext, input: { folderId?: string; query?: string; limit?: number }) {
-    const limit = Math.min(Math.max(input.limit ?? 100, 1), 200);
+  listMessages(context: AuthContext, input: { folderId?: string; query?: string; limit?: number; offset?: number }) {
+    const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+    const offset = Math.max(input.offset ?? 0, 0);
     if (input.query?.trim()) {
-      return this.messages.searchForAccounts(context.allowedAccountIds, input.query.trim(), limit).map(projectMessageSummary);
+      return this.messages.searchForAccounts(context.allowedAccountIds, input.query.trim(), limit, offset).map(projectMessageSummary);
     }
     if (input.folderId) {
       const folder = this.folders.get(input.folderId);
       if (!folder || !context.allowedAccountIds.includes(folder.accountId)) {
         return [];
       }
-      return this.messages.listByFolder(input.folderId, limit).map(projectMessageSummary);
+      return this.messages.listByFolder(input.folderId, limit, offset).map(projectMessageSummary);
     }
-    return this.messages.listRecentForAccounts(context.allowedAccountIds, limit).map(projectMessageSummary);
+    return this.messages.listRecentForAccounts(context.allowedAccountIds, limit, offset).map(projectMessageSummary);
   }
 
   getMessage(context: AuthContext, messageId: string) {
