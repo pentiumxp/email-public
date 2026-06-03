@@ -12,10 +12,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Invoke-Git {
-  param([string[]]$Args)
-  & git -C $WorkspacePath @Args
+  param([string[]]$GitArgs)
+  & git -C $WorkspacePath @GitArgs
   if ($LASTEXITCODE -ne 0) {
-    throw "git $($Args -join ' ') failed"
+    throw "git $($GitArgs -join ' ') failed"
   }
 }
 
@@ -64,7 +64,7 @@ New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 $archive = Join-Path $tempDir "email-plugin-$commit.tar"
 $b64 = Join-Path $tempDir "email-plugin-$commit.tar.b64"
 
-Invoke-Git -Args @("archive", "--format=tar", "--output=$archive", "HEAD")
+Invoke-Git -GitArgs @("archive", "--format=tar", "--output=$archive", "HEAD")
 $raw = [Convert]::ToBase64String([IO.File]::ReadAllBytes($archive))
 $wrapped = ($raw -split "(.{1,76})" | Where-Object { $_ }) -join "`n"
 [IO.File]::WriteAllText($b64, $wrapped, [Text.Encoding]::ASCII)
