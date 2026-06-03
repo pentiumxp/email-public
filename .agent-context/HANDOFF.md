@@ -541,7 +541,9 @@ Design an independent local Email / Mailbox plugin that:
     `scp` subsystem is unavailable;
   - backs up the previous source tree;
   - preserves `/volume1/docker/email-plugin/runtime`;
-  - runs NAS-side `npm ci --include=dev` and `npm run check`;
+  - runs NAS-side validation inside `node:22-bookworm-slim` with
+    `npm ci --include=dev` and `npm run check` because the NAS host Node/npm can
+    be older than the project runtime requirements;
   - rebuilds `email-plugin:local`, replaces the `email-plugin` container, and
     performs bounded `/api/app-version`, manifest, account-count, and
     message-count smoke checks.

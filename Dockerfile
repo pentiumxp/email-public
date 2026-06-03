@@ -9,9 +9,11 @@ ENV EMAIL_SERVICE_PORT=5175
 ENV EMAIL_SERVICE_STATIC_ROOT=/app/dist/web
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm install --no-save tsx
+RUN npm ci --include=dev
 
 COPY . ./
+RUN npm run build
+RUN npm prune --omit=dev && npm install --no-save tsx
 
 EXPOSE 5175
 
