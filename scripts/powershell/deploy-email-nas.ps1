@@ -91,6 +91,8 @@ RUNTIME_DIR="`$REMOTE_ROOT/runtime"
 BACKUP_DIR="`$REMOTE_ROOT/backups/`$COMMIT-`$(date +%Y%m%d-%H%M%S)"
 ARCHIVE="$remoteArchive"
 DOCKER="/usr/local/bin/docker"
+NPM="/usr/local/bin/npm"
+export PATH="/usr/local/bin:/usr/bin:/bin:`$PATH"
 SUDO_PASS=`$(python3 -c 'import base64; print(base64.b64decode("$sudoB64").decode())')
 
 sudo_docker() {
@@ -111,8 +113,8 @@ sudo_run find "`$SOURCE_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 tar -xf "`$ARCHIVE" -C "`$SOURCE_DIR"
 sudo_run chown -R "`$(id -u):`$(id -g)" "`$SOURCE_DIR"
 cd "`$SOURCE_DIR"
-npm ci --include=dev
-npm run check
+"`$NPM" ci --include=dev
+"`$NPM" run check
 
 if sudo_docker image inspect email-plugin:local >/dev/null 2>&1; then
   sudo_docker image tag email-plugin:local "email-plugin:backup-before-`$COMMIT-`$(date +%Y%m%d-%H%M%S)"
