@@ -97,10 +97,19 @@ sudo_docker() {
   printf '%s\n' "`$SUDO_PASS" | sudo -S "`$DOCKER" "`$@"
 }
 
+sudo_run() {
+  printf '%s\n' "`$SUDO_PASS" | sudo -S "`$@"
+}
+
 mkdir -p "`$SOURCE_DIR" "`$RUNTIME_DIR" "`$BACKUP_DIR"
 tar -czf "`$BACKUP_DIR/source-before.tar.gz" -C "`$SOURCE_DIR" . 2>/dev/null || true
-find "`$SOURCE_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+if [ "`$SOURCE_DIR" != "/volume1/docker/email-plugin/source" ]; then
+  echo "refusing to clear unexpected source directory: `$SOURCE_DIR" >&2
+  exit 1
+fi
+sudo_run find "`$SOURCE_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 tar -xf "`$ARCHIVE" -C "`$SOURCE_DIR"
+sudo_run chown -R "`$(id -u):`$(id -g)" "`$SOURCE_DIR"
 cd "`$SOURCE_DIR"
 npm ci --include=dev
 npm run check
