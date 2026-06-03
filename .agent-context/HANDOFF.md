@@ -522,6 +522,33 @@ Design an independent local Email / Mailbox plugin that:
   - this reuses the existing bounded `/api/messages?limit=50&offset=...` API and
     does not change provider sync, local storage, or mailbox credentials.
 
+## NAS Deployment Script - 2026-06-03
+
+- Added reusable NAS deployment script:
+  - `scripts/powershell/deploy-email-nas.ps1`.
+- Added `.dockerignore` so NAS-side `node_modules`, runtime data, `.git`, and
+  local build outputs are not copied into Docker build context.
+- Script defaults:
+  - NAS host: `192.168.10.99`;
+  - SSH port: `2222`;
+  - SSH user: `xuxinxp`;
+  - SSH key: `C:\Users\xuxin\.ssh\synology_codex_admin_192_168_10_99_20260507_ed25519`;
+  - sudo password file path only: `C:\Users\xuxin\OneDrive\Desktop\nas.txt`;
+  - remote root: `/volume1/docker/email-plugin`.
+- Script behavior:
+  - deploys committed `HEAD` only and warns if the working tree is dirty;
+  - uploads a git archive over SSH using base64 + remote Python because NAS
+    `scp` subsystem is unavailable;
+  - backs up the previous source tree;
+  - preserves `/volume1/docker/email-plugin/runtime`;
+  - runs NAS-side `npm ci --include=dev` and `npm run check`;
+  - rebuilds `email-plugin:local`, replaces the `email-plugin` container, and
+    performs bounded `/api/app-version`, manifest, account-count, and
+    message-count smoke checks.
+- Privacy note:
+  - the script does not print sudo password, mailbox credentials, OAuth tokens,
+    message bodies, attachments, or provider logs.
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.

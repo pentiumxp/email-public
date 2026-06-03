@@ -101,6 +101,19 @@ Full completion still requires:
 npm run check
 ```
 
+NAS production deployment should use the reusable script instead of ad hoc SSH
+steps:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\deploy-email-nas.ps1
+```
+
+The script deploys committed `HEAD` only, uploads through SSH with a base64
+archive stream because NAS `scp` is not available, preserves
+`/volume1/docker/email-plugin/runtime`, backs up the previous source tree, runs
+NAS-side `npm ci --include=dev` and `npm run check`, rebuilds the Docker image,
+replaces the `email-plugin` container, and performs bounded runtime smoke checks.
+
 ## Architecture Boundary Guard
 
 Add tests that assert:

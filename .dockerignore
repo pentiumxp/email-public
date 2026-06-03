@@ -1,0 +1,13 @@
+node_modules
+runtime
+dist
+.git
+.codegraph
+.env
+*.env
+*.secret
+*token*.json
+*client_secret*.json
+logs
+tmp
+.agent-context/archive
