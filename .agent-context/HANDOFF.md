@@ -551,6 +551,39 @@ Design an independent local Email / Mailbox plugin that:
   - the script does not print sudo password, mailbox credentials, OAuth tokens,
     message bodies, attachments, or provider logs.
 
+## NAS Production Deployment - 2026-06-03
+
+- Deployed Email plugin to NAS production with reusable script:
+  - command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\deploy-email-nas.ps1`;
+  - deployed committed `HEAD`: `71b5d1f`;
+  - NAS host: `192.168.10.99:2222`;
+  - remote source: `/volume1/docker/email-plugin/source`;
+  - runtime preserved: `/volume1/docker/email-plugin/runtime:/data`.
+- Deployment fixes made before successful run:
+  - NAS `scp` subsystem is unavailable, so script uploads a base64 git archive
+    over SSH and decodes it with remote Python;
+  - old `source/node_modules` may be root-owned, so source cleanup uses sudo and
+    refuses to clear any path other than `/volume1/docker/email-plugin/source`;
+  - NAS host Node/npm can be Node 20, so validation now runs inside
+    `node:22-bookworm-slim`;
+  - Dockerfile now builds `dist/web` inside the Node 22 image instead of relying
+    on a prebuilt local `dist`.
+- Validation:
+  - local `npm run check` passed: 14 test files / 34 tests;
+  - NAS Docker Node 22 validation passed: 14 test files / 34 tests;
+  - Docker image rebuild completed and container `email-plugin` was replaced;
+  - runtime smoke passed:
+    - `/api/app-version` returned bounded version `v-73eba5e6`;
+    - `/manifest.webmanifest` returned successfully;
+    - `/api/accounts` bounded count: 3;
+    - `/api/messages?folderId=gmail-folder-INBOX&limit=5` bounded count: 5.
+- Backup:
+  - previous source backup:
+    `/volume1/docker/email-plugin/backups/71b5d1f-20260603-172900/source-before.tar.gz`.
+- Current container check after deployment:
+  - `email-plugin email-plugin:local Up`;
+  - service version remained `v-73eba5e6`.
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.
