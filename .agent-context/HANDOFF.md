@@ -584,6 +584,96 @@ Design an independent local Email / Mailbox plugin that:
   - `email-plugin email-plugin:local Up`;
   - service version remained `v-73eba5e6`.
 
+## MCP Interface For Hermes Mobile - 2026-06-04
+
+- Added a real stdio MCP entrypoint for Hermes Mobile:
+  - command: `npm --silent run mcp:stdio`;
+  - entrypoint: `mcp/stdio-server.ts`;
+  - protocol helper: `mcp/stdio-protocol.ts`.
+- Added service-first MCP read layer:
+  - `service/email-mcp-service.ts`;
+  - delegates mailbox reads to `MailboxReadService`;
+  - reuses `AuthorizationService` launch-session contexts;
+  - filters all account/folder/message reads by `allowedAccountIds`.
+- Added neutral runtime DB path helper:
+  - `store/runtime-paths.ts`;
+  - MCP reads `EMAIL_PLUGIN_DB` first, then `EMAIL_PLUGIN_RUNTIME_DIR`, then `runtime/data/mail.sqlite`.
+- Hermes-facing MCP tools now use dotted names:
+  - `email.list_accounts`;
+  - `email.list_mailboxes`;
+  - `email.search_messages`;
+  - `email.get_message`;
+  - `email.get_digest`;
+  - `email.list_attachments`;
+  - `email.sync_account`;
+  - `email.apply_mail_action`.
+- Legacy underscore aliases remain accepted for older harness compatibility:
+  - `email_list_accounts`;
+  - `email_auth_status`;
+  - `email_list_folders`;
+  - `email_search_messages`;
+  - `email_list_recent_messages`;
+  - `email_get_message_summary`;
+  - `email_list_attachments`.
+- Privacy behavior:
+  - MCP detail returns bounded sanitized excerpt and attachment metadata only;
+  - MCP detail does not return raw MIME, attachment content, local paths, provider tokens, provider passwords, or the full local body field;
+  - `email.apply_mail_action` supports only `delete_local`, writes a local tombstone and audit row, and returns `remoteApplied=false`;
+  - `email.sync_account` is a read-only compatibility diagnostic for V1. Provider sync remains owned by the Email scheduler/service and explicit local scripts.
+- Authorization behavior:
+  - Hermes should pass the short-lived Email launch session via `EMAIL_MCP_SESSION_TOKEN` for the spawned MCP process, or as optional `sessionToken` per tool call if the host requires per-call context;
+  - without a session token, MCP read tools fail closed with `email_mcp_session_denied`.
+- Manifest MCP metadata now includes:
+  - `email.list_accounts` in required tools;
+  - `command: npm --silent run mcp:stdio`.
+- Added focused MCP harness:
+  - `tests/email-mcp-service.test.ts`;
+  - verifies dotted tool names, session account filtering, bounded detail output, attachment metadata-only output, and stdio JSON-RPC initialize/tools/list/tools/call.
+- Updated docs:
+  - `docs/MCP_CONTRACT.md`;
+  - `docs/IMPLEMENTATION_PLAN.md`;
+  - `docs/ARCHITECTURE.md`;
+  - `docs/SECURITY_PRIVACY.md`;
+  - `docs/HARNESS_AND_DOCS_RULES.md`.
+- Verification:
+  - `npm exec vitest run tests/email-mcp-service.test.ts tests/architecture-boundary.test.ts` passed: 2 test files / 8 tests.
+
+## MCP Fail-Closed Session Update - 2026-06-04
+
+- Updated MCP authorization so missing `EMAIL_MCP_SESSION_TOKEN` and missing per-call `sessionToken` no longer fall back to `local-admin`.
+- No-token MCP tool calls now return bounded error `email_mcp_session_denied`.
+- `local-admin` bootstrap remains available for HTTP/UI standalone administration paths where explicitly used, but not for MCP.
+- Updated MCP docs and harness rules to require session context for MCP reads.
+- Verification:
+  - `npm exec vitest run tests/email-mcp-service.test.ts tests/architecture-boundary.test.ts` passed: 2 test files / 9 tests;
+  - `npm run check` passed: 15 test files / 40 tests;
+  - actual stdio no-token smoke returned `isError=true` with bounded error `email_mcp_session_denied`.
+
+## MCP Local Delete Action - 2026-06-04
+
+- Added MCP local delete capability through `email.apply_mail_action`.
+- V1 supported action:
+  - `delete_local`.
+- Behavior:
+  - requires `EMAIL_MCP_SESSION_TOKEN` or per-call `sessionToken`;
+  - verifies the message is visible to the current launch-session allowed accounts;
+  - marks the local message as deleted/tombstoned;
+  - writes a `mail_actions` audit row with `local_delete_tombstone`;
+  - returns bounded status with `remoteApplied=false` and `localOnly=true`;
+  - does not call Outlook, Gmail, AliMail, IMAP, or SMTP remote delete APIs.
+- Unsupported actions such as `remote_delete` fail with `email_mcp_action_not_supported`.
+- Verification:
+  - `npm exec vitest run tests/email-mcp-service.test.ts tests/mailbox-action-service.test.ts tests/architecture-boundary.test.ts` passed: 3 test files / 12 tests;
+  - `npm run check` passed: 15 test files / 42 tests.
+
+## Default Mailbox Ordering - 2026-06-05
+
+- Updated the web UI account ordering so Qifan/AliMail is the default mailbox when present.
+- The quick account switcher and folder-pane account stack share the same sorted account list.
+- Other accounts keep their original relative order after Qifan/AliMail.
+- Verification:
+  - `npm exec vitest run tests/ui-account-switcher.test.tsx` passed: 1 test file / 5 tests.
+
 ## Not Yet Done
 
 - Git repository has not been initialized in this workspace.
@@ -616,3 +706,32 @@ Design an independent local Email / Mailbox plugin that:
 - Write operations such as delete, archive, move, mark read, send, or reply must be explicit, audited, and idempotent.
 - Sending or replying should not be part of V1 unless separately approved.
 - Hermes Mobile integration should use MCP and embedded plugin UI. Hermes Mobile should not directly own mailbox credentials or sync logic.
+
+## 2026-06-06 Home AI Platform Contract Pointer
+
+- Added `docs/HOME_AI_PLATFORM_CONTRACT.md`.
+- Contract version: `20260606-v1`.
+- Scope: Email is treated as a standard inserted Home AI plugin for the
+  cross-workspace platform contract rollout.
+- This was a documentation-only update. No Email code, local service, Mac
+  production files, Gateway workers, mailbox data, OAuth tokens, cookies, or
+  credentials were changed.
+- Next steps:
+  - implement Reference Contract V1 methods for Email messages, threads,
+    attachments, and accounts;
+  - document the exact Mac production deploy command once stabilized;
+  - add Appium/iOS Simulator evidence for embedded UI and account switching.
+
+## 2026-06-06 Home AI Platform Contract Checker Closure
+
+- Home AI main workspace added and ran:
+  `node scripts\plugin-workspace-platform-contract-check.js --plugin email --json`.
+- Mac read-only platform probe passed through `homeai-mac`:
+  - source path `/Users/hermes-host/HermesMobile/plugins/email` exists;
+  - runtime/data root `/Users/hermes-host/HermesMobile/plugins/email/runtime`
+    exists;
+  - launchd `com.hermesmobile.plugin.email` is loaded;
+  - manifest `http://127.0.0.1:5175/api/v1/hermes/plugin/manifest` returned
+    HTTP 200.
+- No Email code, service, production data, Gateway worker, mailbox data, OAuth
+  token, cookie, or credential material was changed by this checker closure.
