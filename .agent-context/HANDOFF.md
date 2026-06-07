@@ -735,3 +735,36 @@ Design an independent local Email / Mailbox plugin that:
     HTTP 200.
 - No Email code, service, production data, Gateway worker, mailbox data, OAuth
   token, cookie, or credential material was changed by this checker closure.
+
+## 2026-06-07 Message Detail Cache Notice Removal
+
+- Removed the `Local mailbox cache` notice block from the message detail pane.
+- Removed the now-unused `ShieldAlert` icon import.
+- This is a UI-only display change; local read/unread/delete behavior and MCP
+  local delete semantics were not changed.
+- Verification:
+  - `npm exec vitest run tests/ui-account-switcher.test.tsx` passed: 1 test file / 5 tests;
+  - `npm run build` passed.
+
+## 2026-06-07 Mac Production MCP Deployment
+
+- Email plugin source was deployed to Mac production path
+  `/Users/hermes-host/HermesMobile/plugins/email` with `runtime` preserved.
+- Production backup was written under
+  `/Users/hermes-host/HermesMobile/backups/plugins/email/`.
+- Restarted `system/com.hermesmobile.plugin.email`.
+- Production validation:
+  - manifest HTTP 200;
+  - `/api/app-version` HTTP 200;
+  - manifest MCP command is `npm --silent run mcp:stdio`;
+  - direct production MCP `tools/list` includes `email.apply_mail_action`;
+  - direct no-token MCP call returns bounded error `email_mcp_session_denied`;
+  - production UI asset no longer contains `Local mailbox cache`.
+- Home AI main app Gateway closure was also updated and deployed:
+  - `adapters/gateway-run-instruction-service.js` now includes Email callable
+    hints including `mcp_email_apply_mail_action`;
+  - `mobile-server-runtime.js` schema epoch is
+    `20260607-email-local-delete-mcp-v1`;
+  - selected Mac Gateway worker `hm-owner-openai-1` schema smoke passed with
+    `mcp_email_apply_mail_action`;
+  - `system/com.hermesmobile.listener` was restarted.

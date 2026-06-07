@@ -69,12 +69,15 @@ export class HermesPluginService {
         server: "email-mcp",
         toolset: "email",
         required_tools: [
+          "email.list_accounts",
           "email.search_messages",
           "email.get_message",
           "email.list_mailboxes",
           "email.get_digest",
-          "email.sync_account"
-        ]
+          "email.sync_account",
+          "email.apply_mail_action"
+        ],
+        command: "npm --silent run mcp:stdio"
       },
       program_api: {
         base_url: baseUrl,

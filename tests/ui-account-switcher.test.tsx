@@ -72,6 +72,46 @@ describe("mail account quick switcher", () => {
     expect(css).toContain("flex-basis: calc((100% - 16px) / 3);");
   });
 
+  it("defaults to the Qifan mailbox when it is present", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "/api/accounts") {
+        return jsonResponse({
+          accounts: [
+            account("gmail-primary", "Gmail", "user@gmail.example"),
+            account("outlook-hotmail-primary", "Hotmail", "user@hotmail.example"),
+            account("alimail-qifan-primary", "Qifan", "owner@qifan.example")
+          ]
+        });
+      }
+      if (url.includes("/api/folders?accountId=alimail-qifan-primary")) {
+        return jsonResponse({ folders: [folder("qifan-inbox", "alimail-qifan-primary", "INBOX")] });
+      }
+      if (url.includes("/api/folders")) {
+        return jsonResponse({ folders: [] });
+      }
+      if (url.includes("/api/messages")) {
+        return jsonResponse({ messages: [], hasMore: false, nextOffset: 0 });
+      }
+      return jsonResponse({}, 404);
+    }));
+
+    const rootElement = document.getElementById("root");
+    if (!rootElement) {
+      throw new Error("missing root");
+    }
+    await act(async () => {
+      createRoot(rootElement).render(<App />);
+    });
+
+    await waitFor(() => expect(requests.some((url) => url.includes("accountId=alimail-qifan-primary"))).toBe(true));
+    const firstQuickAccount = document.querySelector<HTMLButtonElement>(".quick-account");
+    expect(firstQuickAccount?.textContent).toContain("\u8d77\u51e1\u90ae\u7bb1");
+    expect(firstQuickAccount?.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("shows a refresh prompt when the served app version changes", async () => {
     vi.useFakeTimers();
     let versionChecks = 0;

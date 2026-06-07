@@ -78,6 +78,10 @@ Provider proxy setup must remain server-side. It must not be sent to the browser
 
 MCP outputs should default to summaries and metadata. Full body access, attachment extraction, and send/reply operations require separate capability and audit design.
 
+Current MCP detail output returns bounded sanitized excerpts plus attachment metadata only. It does not return raw MIME, attachment content, provider tokens, provider passwords, local file paths, or the full local body field.
+
+The V1 MCP local delete action only writes a local tombstone and audit row. It must not call remote mailbox providers or imply that provider-side mail was deleted.
+
 ## Hermes Mobile Privacy Boundary
 
 Hermes Mobile should receive:
@@ -116,7 +120,7 @@ Current implementation status:
 - Workspace registration requires the local Email owner key. The owner key default location is `runtime/secrets/hermes/owner-key.txt`.
 - Workspace launch requires the workspace-local key written to `.hermes-email/access-key.txt` under the registered workspace root.
 - Workspace registration and launch responses do not return raw owner/workspace keys.
-- MCP session enforcement is still required before production multi-user use.
+- MCP read tools now use the same launch-session authorization service. Hermes Mobile should pass the short-lived session through host-controlled MCP process environment or per-call context, never through browser-visible long-lived keys. Missing or invalid MCP session context must fail closed.
 
 Forbidden shortcuts:
 

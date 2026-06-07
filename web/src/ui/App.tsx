@@ -1,4 +1,4 @@
-import { Archive, Bell, CheckCheck, ChevronLeft, Inbox, Mail, MailOpen, Menu, Paperclip, RefreshCw, Search, Settings, ShieldAlert, Star, Trash2, X } from "lucide-react";
+import { Archive, Bell, CheckCheck, ChevronLeft, Inbox, Mail, MailOpen, Menu, Paperclip, RefreshCw, Search, Settings, Star, Trash2, X } from "lucide-react";
 import type { FormEvent, TouchEvent, UIEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -148,15 +148,16 @@ export function App() {
     setListState("loading");
     try {
       const payload = await fetchJson<{ accounts: AccountSummary[] }>("/api/accounts");
-      setAccounts(payload.accounts);
-      if (payload.accounts[0]) {
-        setActiveAccountId(payload.accounts[0].id);
+      const sortedAccounts = sortAccountsForDefaultMailbox(payload.accounts);
+      setAccounts(sortedAccounts);
+      if (sortedAccounts[0]) {
+        setActiveAccountId(sortedAccounts[0].id);
       } else {
         setFolderState("idle");
         setListState("idle");
       }
       setAccountState("idle");
-      setStatus(payload.accounts.length ? "Connected to local SQLite mail store" : "No local accounts found");
+      setStatus(sortedAccounts.length ? "Connected to local SQLite mail store" : "No local accounts found");
     } catch (error) {
       setAccountState("error");
       setFolderState("error");
@@ -512,13 +513,6 @@ export function App() {
               </div>
               <time>{new Date(activeMessage.receivedAt).toLocaleString()}</time>
             </div>
-            <section className="safe-preview">
-              <ShieldAlert size={18} />
-              <div>
-                <strong>Local mailbox cache</strong>
-                <p>Read/unread and delete are local actions. Remote mailbox writes require a separate Outlook write scope.</p>
-              </div>
-            </section>
             <p className="body-placeholder">{activeMessage.bodyText || activeMessage.bodyExcerpt || "No local body text cached for this message."}</p>
             {activeMessage.attachments.length > 0 ? (
               <div className="attachment-list">
@@ -573,6 +567,24 @@ function quickAccountLabel(account: AccountSummary) {
     return "\u8d77\u51e1\u90ae\u7bb1";
   }
   return label || account.provider;
+}
+
+function sortAccountsForDefaultMailbox(accounts: AccountSummary[]) {
+  return accounts
+    .map((account, index) => ({ account, index }))
+    .sort((a, b) => accountPriority(a.account) - accountPriority(b.account) || a.index - b.index)
+    .map((entry) => entry.account);
+}
+
+function accountPriority(account: AccountSummary) {
+  return isQifanAccount(account) ? 0 : 10;
+}
+
+function isQifanAccount(account: AccountSummary) {
+  const provider = account.provider.toLowerCase();
+  const label = account.accountLabel.toLowerCase();
+  const address = account.displayAddress.toLowerCase();
+  return provider.includes("alimail") || provider.includes("qifan") || label.includes("qifan") || label.includes("\u8d77\u51e1") || address.includes("qifan");
 }
 
 function formatBytes(value: number | null) {

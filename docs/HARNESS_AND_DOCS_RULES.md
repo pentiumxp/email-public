@@ -95,6 +95,25 @@ This command covers:
 - Gmail and Outlook provider clients wiring through `connectors/http/provider-fetch-proxy.ts`;
 - boundary checks that UI, MCP, HTTP routes, and Hermes plugin glue do not import provider proxy runtime directly.
 
+MCP read-contract changes must run:
+
+```powershell
+npm exec vitest run tests/email-mcp-service.test.ts tests/architecture-boundary.test.ts
+```
+
+This command covers:
+
+- Hermes-facing dotted MCP tool names;
+- launch-session account filtering;
+- missing MCP session context fails closed;
+- bounded message detail output without raw full body fields;
+- attachment metadata only;
+- local-only delete tombstone writes an audit row, removes the message from normal reads, and reports `remoteApplied=false`;
+- stdio JSON-RPC initialize, tools/list, and tools/call smoke;
+- boundary checks that the stdio entrypoint stays protocol glue.
+
+When running an actual MCP stdio smoke, use `npm --silent run mcp:stdio` so stdout contains only JSON-RPC responses.
+
 Full completion still requires:
 
 ```powershell

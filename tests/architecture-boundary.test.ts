@@ -12,6 +12,17 @@ describe("architecture boundaries", () => {
     expect(source.length).toBeLessThan(2500);
   });
 
+  it("keeps MCP stdio entrypoint as protocol and runtime glue", () => {
+    const source = readFileSync(join(root, "mcp/stdio-server.ts"), "utf8");
+    expect(source).toContain("EmailMcpService");
+    expect(source).toContain("openMailDatabase");
+    expect(source).not.toContain("SELECT ");
+    expect(source).not.toContain("gmail-config");
+    expect(source).not.toContain("outlook-config");
+    expect(source).not.toContain("alimail-config");
+    expect(source.length).toBeLessThan(1500);
+  });
+
   it("keeps UI from importing SQLite or provider connector modules", () => {
     const files = listFiles(join(root, "web/src")).filter((file) => /\.(ts|tsx)$/.test(file));
     const combined = files.map((file) => readFileSync(file, "utf8")).join("\n");

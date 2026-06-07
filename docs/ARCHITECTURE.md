@@ -56,6 +56,7 @@ Business rules belong in services:
 - provider retry policy;
 - write confirmation and audit;
 - privacy projection;
+- MCP authorization and bounded read projection;
 - Hermes notification projection.
 
 ## Connector Boundary
@@ -176,12 +177,13 @@ Current implementation status:
 
 - The current local runtime has a `local-admin` bootstrap context for standalone administration.
 - Store tables now include `plugin_users`, `user_mail_accounts`, and `plugin_sessions`.
-- Hermes launch sessions can carry allowed account ids and API reads/actions filter through that server-side context.
+- Hermes launch sessions can carry allowed account ids and UI/API/MCP reads/actions filter through that server-side context.
+- The stdio MCP server is `mcp/stdio-server.ts`; it opens the local SQLite database, runs migrations, and delegates tool calls to `service/email-mcp-service.ts`.
 - Remaining hardening before production:
   - host-side launch authentication between Hermes Mobile and Email plugin;
   - UI for user account binding/reconnect/disable;
   - admin bounded health view separated from mailbox content;
-  - MCP server enforcement using the same authorization context.
+  - Hermes-side MCP process/session wiring using the short-lived Email launch session.
 
 ## Outlook / Hotmail Realtime Sync Strategy
 

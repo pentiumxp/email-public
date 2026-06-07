@@ -22,7 +22,7 @@ Done in first implementation slice:
 - SQLite schema and migration runner using `node:sqlite`.
 - Account, folder, and message repositories with duplicate-safe message upsert.
 - Privacy projection service for bounded message summaries.
-- Read-only MCP glue helpers for recent/search message queries.
+- Read-only MCP glue helpers for recent/search message queries; stdio MCP service added later under Phase 4.
 - Outlook-style local UI shell using synthetic metadata only.
 - Store, privacy projection, and architecture boundary tests.
 - Browser smoke check at desktop and mobile widths.
@@ -132,14 +132,19 @@ Tests:
 
 Implement read-only tools first:
 
-- `email_auth_status`
-- `email_list_accounts`
-- `email_list_folders`
-- `email_search_messages`
-- `email_list_recent_messages`
-- `email_get_message_summary`
-- `email_get_message_metadata`
-- `email_list_attachments`
+- `email.list_accounts` complete.
+- `email.list_mailboxes` complete.
+- `email.search_messages` complete.
+- `email.get_message` complete with bounded excerpt and no raw body field.
+- `email.get_digest` complete.
+- `email.list_attachments` complete with metadata only.
+- `email.sync_account` exists as a read-only compatibility diagnostic; provider sync side effects remain outside MCP.
+- `email.apply_mail_action` supports audited local-only `delete_local` tombstones. It does not call remote providers.
+
+Entrypoint:
+
+- `npm --silent run mcp:stdio`
+- database path comes from `EMAIL_PLUGIN_DB` or `EMAIL_PLUGIN_RUNTIME_DIR`.
 
 Write tools later and gated:
 
@@ -152,6 +157,9 @@ Tests:
 - tool schema is stable;
 - outputs are privacy-bounded;
 - invalid account/folder/message ids fail closed;
+- read tools reuse launch-session authorization and filter by allowed account ids;
+- missing MCP session context fails closed;
+- local delete writes an audit row and returns `remoteApplied: false`;
 - write tools require explicit enablement.
 
 ## Phase 5: Web UI
@@ -188,6 +196,7 @@ Tests:
 - first-level account quick switcher renders available accounts and switches the active account without opening the folder drawer; initial jsdom coverage and three-slot width guard added.
 - app-version service returns bounded build metadata and frontend shows a refresh prompt when the version changes; initial coverage added.
 - message pagination returns 50 messages by default and honors `offset`; initial store/service/UI coverage added.
+- default account ordering now puts Qifan/AliMail first when present, while preserving the previous relative order for other accounts.
 
 ## Phase 6: Hermes Mobile Plugin Integration
 
@@ -198,7 +207,7 @@ Implement:
 - workspace registration endpoint; initial HTTP endpoint complete.
 - host-verified user/workspace launch context; Email-side session model complete, host authentication still pending.
 - per-user mailbox account binding; initial store model complete.
-- account visibility filtering for UI/API complete; MCP filtering still pending.
+- account visibility filtering for UI/API/MCP complete on the Email side; Hermes host still needs final MCP process/session wiring.
 - admin bounded health view separate from mailbox-content access;
 - same-origin iframe/proxy contract;
 - `postMessage` navigation/back contract:
@@ -221,6 +230,7 @@ Tests:
 - launch does not expose secrets; initial endpoint returns only entry path, expiry, and visible account count.
 - launch session cannot be forged from browser-supplied user/account ids; host-side authentication still pending.
 - ordinary user cannot list or read another user's mailbox account; initial service coverage added.
+- MCP launch-session filtering prevents a member from reading another account; initial service coverage added.
 - admin health view does not expose another user's full message body or attachment content;
 - iframe route can return to Hermes Mobile host;
 - postMessage navigation/back events are privacy-bounded; initial iframe implementation added, stricter origin allowlist still pending.

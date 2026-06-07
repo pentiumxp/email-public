@@ -21,6 +21,7 @@
     "sync:outlook:delta": "tsx scripts/sync-outlook-delta.ts",
     "poll:outlook": "tsx scripts/poll-outlook.ts",
     "service": "tsx scripts/email-service.ts",
+    "mcp:stdio": "tsx mcp/stdio-server.ts",
     "harness:provider-proxy": "vitest run tests/provider-fetch-proxy.test.ts tests/provider-proxy-boundary.test.ts tests/architecture-boundary.test.ts"
   },
   "dependencies": {

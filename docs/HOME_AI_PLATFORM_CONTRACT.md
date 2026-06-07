@@ -1,6 +1,6 @@
 # Home AI Platform Contract Pointer
 
-Last updated: 2026-06-06.
+Last updated: 2026-06-07.
 Home AI platform contract version: `20260606-v1`.
 
 ## Scope
@@ -36,9 +36,9 @@ behavior, or cross-plugin reference behavior:
 | `macos_production_base_url` | `http://127.0.0.1:5175` |
 | `launchd_label` | `system/com.hermesmobile.plugin.email` |
 | `manifest_url` | `http://127.0.0.1:5175/api/v1/hermes/plugin/manifest` |
-| `mcp_command` | `npm run mcp:stdio` |
+| `mcp_command` | `npm --silent run mcp:stdio` |
 | `mcp_schema_endpoint` | MCP `tools/list` through the stdio wrapper and plugin manifest through HTTP |
-| `deploy_command` | Use the Home AI Mac access runbook; verify the current Email deploy script/path before production sync. |
+| `deploy_command` | Use the Home AI Mac access runbook; sync source to `/Users/hermes-host/HermesMobile/plugins/email`, preserve `runtime`, run local checks, restart `system/com.hermesmobile.plugin.email`, then run platform checker, direct MCP fail-close/tools smokes, and Home AI Gateway schema closure for changed MCP callables. |
 | `credential_locations` | Provider OAuth/client/token config paths only by reference. Do not record raw OAuth tokens, client secrets, cookies, or mailbox contents here. |
 | `reference_contract_status` | `planned`; Email should later expose Reference Contract methods for mail messages, threads, attachments, and mailbox accounts with permission-trimmed summaries. |
 | `mobile_visual_harness_status` | Local UI and service tests exist; Home AI Appium/iOS Simulator evidence is required for embedded mobile UI, account switching, safe-area, or PWA differences. |
@@ -88,6 +88,24 @@ Minimum closure for Email production changes:
    `mcp_email_*` tool names;
 5. for mailbox sync or write-action changes, perform a bounded readback smoke
    with metadata-only output.
+
+## Latest Production Evidence
+
+2026-06-07 Mac production deployment:
+
+- Email plugin source was synced to
+  `/Users/hermes-host/HermesMobile/plugins/email` with `runtime` preserved.
+- Email production backup was written under
+  `/Users/hermes-host/HermesMobile/backups/plugins/email/`.
+- `system/com.hermesmobile.plugin.email` was restarted.
+- Production manifest returned HTTP 200 and reports
+  `npm --silent run mcp:stdio`.
+- Direct production MCP `tools/list` includes `email.apply_mail_action`.
+- Direct production no-token MCP smoke fails closed with
+  `email_mcp_session_denied`.
+- Home AI Gateway schema was updated to epoch
+  `20260607-email-local-delete-mcp-v1`; selected Mac worker
+  `hm-owner-openai-1` exposes `mcp_email_apply_mail_action`.
 
 ## Open Gaps
 

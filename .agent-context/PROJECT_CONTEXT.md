@@ -112,3 +112,9 @@ Use bounded metadata: account id, provider, folder id/name, message id/hash, sub
 - Follow `docs/HERMES_PLUGIN_HOST_CONTRACT.md` before implementing Hermes Mobile embedding.
 - Required cooperation points include manifest, launch, same-origin proxy safety, `postMessage` navigation/back, `email.plugin.refresh_required`, and theme/font inheritance.
 - Plugin host messages must carry bounded route/status metadata only, never tokens, cookies, full message bodies, attachments, or raw local paths.
+## HANES Context Loading
+
+- Use .agent-context/HANES_CONTEXT_LOADING.md for cross-workspace context loading discipline. Keep startup context short; load detailed skills, docs, handoffs, archives, and harness matrices only when the current task crosses that risk boundary.
+## Workspace Bootstrap Read First
+
+- Use .agent-context/WORKSPACE_BOOTSTRAP_READ_FIRST.md for cross-workspace startup discipline. Confirm the intended workspace, read bounded .agent-context/PROJECT_CONTEXT.md and .agent-context/HANDOFF.md before substantive work, honor continuation read-only mode, and combine this with .agent-context/HANES_CONTEXT_LOADING.md to avoid loading full historical context unless needed.
