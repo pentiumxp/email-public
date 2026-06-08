@@ -38,11 +38,13 @@ behavior, or cross-plugin reference behavior:
 | `manifest_url` | `http://127.0.0.1:5175/api/v1/hermes/plugin/manifest` |
 | `mcp_command` | `npm --silent run mcp:stdio` |
 | `mcp_schema_endpoint` | MCP `tools/list` through the stdio wrapper and plugin manifest through HTTP |
+| `dev_runtime_prerequisites` | Mac DEV must expose Node and npm through `/Users/xuxin/Developer/HomeAIDev/bin`; run `node --version` and `npm --version` before classifying MCP/service test failures. |
 | `deploy_command` | Use the Home AI Mac access runbook; sync source to `/Users/hermes-host/HermesMobile/plugins/email`, preserve `runtime`, run local checks, restart `system/com.hermesmobile.plugin.email`, then run platform checker, direct MCP fail-close/tools smokes, and Home AI Gateway schema closure for changed MCP callables. |
 | `credential_locations` | Provider OAuth/client/token config paths only by reference. Do not record raw OAuth tokens, client secrets, cookies, or mailbox contents here. |
 | `reference_contract_status` | `planned`; Email should later expose Reference Contract methods for mail messages, threads, attachments, and mailbox accounts with permission-trimmed summaries. |
 | `mobile_visual_harness_status` | Local UI and service tests exist; Home AI Appium/iOS Simulator evidence is required for embedded mobile UI, account switching, safe-area, or PWA differences. |
 | `ios_live_debug_available` | `yes`; use Home AI `npm run ios:pwa:debug` for interactive embedded iOS PWA reproduction, with one Simulator/live-debug-port/WDA-port/MJPEG-port lane per concurrent plugin debug session. |
+| `ios_visual_harness_command` | `cd /Users/hermes-dev/HermesMobileDev/app && npm run ios:pwa:visual -- --scenario embedded-plugin-shell --plugin-id email --debug-url http://127.0.0.1:19073/` |
 
 ## Required Local Validation
 
