@@ -42,6 +42,7 @@ behavior, or cross-plugin reference behavior:
 | `credential_locations` | Provider OAuth/client/token config paths only by reference. Do not record raw OAuth tokens, client secrets, cookies, or mailbox contents here. |
 | `reference_contract_status` | `planned`; Email should later expose Reference Contract methods for mail messages, threads, attachments, and mailbox accounts with permission-trimmed summaries. |
 | `mobile_visual_harness_status` | Local UI and service tests exist; Home AI Appium/iOS Simulator evidence is required for embedded mobile UI, account switching, safe-area, or PWA differences. |
+| `ios_live_debug_available` | `yes`; use Home AI `npm run ios:pwa:debug` for interactive embedded iOS PWA reproduction, with one Simulator/live-debug-port/WDA-port/MJPEG-port lane per concurrent plugin debug session. |
 
 ## Required Local Validation
 
