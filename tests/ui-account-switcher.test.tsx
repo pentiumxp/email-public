@@ -9,6 +9,7 @@ import { App } from "../web/src/ui/App";
 describe("mail account quick switcher", () => {
   beforeEach(() => {
     document.body.innerHTML = '<div id="root"></div>';
+    window.history.replaceState(null, "", "/");
   });
 
   afterEach(() => {
@@ -110,6 +111,36 @@ describe("mail account quick switcher", () => {
     const firstQuickAccount = document.querySelector<HTMLButtonElement>(".quick-account");
     expect(firstQuickAccount?.textContent).toContain("\u8d77\u51e1\u90ae\u7bb1");
     expect(firstQuickAccount?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("applies host plugin action routes after folders load", async () => {
+    window.history.replaceState(null, "", "/?pluginActionId=needs_reply");
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "/api/accounts") {
+        return jsonResponse({ accounts: [account("gmail-primary", "Gmail", "user@gmail.example")] });
+      }
+      if (url.includes("/api/folders")) {
+        return jsonResponse({ folders: [folder("gmail-inbox", "gmail-primary", "INBOX")] });
+      }
+      if (url.includes("/api/messages")) {
+        return jsonResponse({ messages: [], hasMore: false, nextOffset: 0 });
+      }
+      return jsonResponse({}, 404);
+    }));
+
+    const rootElement = document.getElementById("root");
+    if (!rootElement) {
+      throw new Error("missing root");
+    }
+    await act(async () => {
+      createRoot(rootElement).render(<App />);
+    });
+
+    await waitFor(() => expect(requests.some((url) => url.includes("query=unread"))).toBe(true));
+    expect(document.querySelector<HTMLInputElement>(".search-box input")?.value).toBe("unread");
   });
 
   it("shows a refresh prompt when the served app version changes", async () => {

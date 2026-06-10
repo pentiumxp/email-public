@@ -22,6 +22,13 @@ describe("HermesPluginService", () => {
         raw_key_returned_by_email: false
       }
     });
+    expect(manifest.actions.find((action: any) => action.id === "inbox")).toEqual({
+      id: "inbox",
+      label: "收件箱",
+      placement: ["plugin_drawer_frequent", "dock_long_press", "search"],
+      priority: 10,
+      entry: { type: "plugin_route", pluginRoute: "inbox" }
+    });
     expect(JSON.stringify(manifest)).not.toContain("access_token");
     expect(JSON.stringify(manifest)).not.toContain("refresh_token");
     expect(JSON.stringify(manifest)).not.toContain("secret");

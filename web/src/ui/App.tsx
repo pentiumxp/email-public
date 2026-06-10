@@ -49,6 +49,7 @@ interface MessageDetail extends MessageSummary {
 }
 
 export function App() {
+  const initialPluginActionRoute = useMemo(readInitialPluginActionRoute, []);
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
   const [folders, setFolders] = useState<FolderSummary[]>([]);
   const [messages, setMessages] = useState<MessageSummary[]>([]);
@@ -70,6 +71,7 @@ export function App() {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const messageRequestSeq = useRef(0);
   const appVersion = useRef<string | null>(null);
+  const pluginActionRouteApplied = useRef(false);
 
   const activeAccount = useMemo(() => accounts.find((account) => account.id === activeAccountId), [accounts, activeAccountId]);
   const activeFolder = useMemo(() => folders.find((folder) => folder.id === activeFolderId), [activeFolderId, folders]);
@@ -141,6 +143,14 @@ export function App() {
       setActiveMessage(null);
     }
   }, [activeMessageId]);
+
+  useEffect(() => {
+    if (!initialPluginActionRoute || pluginActionRouteApplied.current || folderState !== "idle") {
+      return;
+    }
+    pluginActionRouteApplied.current = true;
+    applyInitialPluginActionRoute(initialPluginActionRoute);
+  }, [activeFolderId, folderState, folders, initialPluginActionRoute]);
 
   async function loadAccounts() {
     setAccountState("loading");
@@ -296,6 +306,42 @@ export function App() {
   function selectMessage(messageId: string) {
     setActiveMessageId(messageId);
     setDetailOpen(true);
+  }
+
+  function applyInitialPluginActionRoute(route: string) {
+    setDetailOpen(false);
+    setFolderPaneOpen(false);
+    if (route === "inbox") {
+      const inbox = folders.find(isInboxFolder) || folders[0];
+      setQuery("");
+      if (inbox && inbox.id !== activeFolderId) setActiveFolderId(inbox.id);
+      setStatus("Inbox");
+      return;
+    }
+    if (route === "needs_reply") {
+      setQuery("unread");
+      void loadMessages({ searchQuery: "unread", reset: true });
+      setStatus("Searching unread mail");
+      return;
+    }
+    if (route === "search") {
+      setQuery("");
+      setStatus("Search local mail");
+      return;
+    }
+    if (route === "digest") {
+      setQuery("");
+      setStatus("Digest opens the local mailbox list; AI digest runs from Home AI chat.");
+      return;
+    }
+    if (route === "cleanup") {
+      setQuery("");
+      setStatus("Search first, then delete local mailbox entries from the message detail.");
+      return;
+    }
+    if (route === "compose") {
+      setStatus("Compose is not available in this local mailbox UI yet.");
+    }
   }
 
   async function setActiveReadState(isRead: boolean) {
@@ -537,6 +583,13 @@ export function App() {
 const LOADING_MESSAGES_LABEL = "\u6b63\u5728\u52a0\u8f7d\u90ae\u4ef6...";
 const APP_VERSION_CHECK_MS = 60000;
 const MESSAGE_PAGE_SIZE = 50;
+const SUPPORTED_PLUGIN_ACTION_ROUTES = new Set(["inbox", "needs_reply", "search", "compose", "digest", "cleanup"]);
+
+function readInitialPluginActionRoute() {
+  const params = new URLSearchParams(window.location.search);
+  const route = String(params.get("pluginRoute") || params.get("route") || params.get("pluginActionId") || "").trim().toLowerCase();
+  return SUPPORTED_PLUGIN_ACTION_ROUTES.has(route) ? route : "";
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, headers: { accept: "application/json", ...(init?.headers || {}) } });

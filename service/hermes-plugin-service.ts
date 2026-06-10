@@ -22,6 +22,15 @@ export interface LaunchRequestInput {
   };
 }
 
+const HERMES_PLUGIN_ACTIONS = Object.freeze([
+  { id: "inbox", label: "收件箱", route: "inbox", priority: 10 },
+  { id: "needs_reply", label: "待回复", route: "needs_reply", priority: 20 },
+  { id: "search", label: "搜邮件", route: "search", priority: 30 },
+  { id: "compose", label: "写邮件", route: "compose", priority: 40 },
+  { id: "digest", label: "邮件摘要", route: "digest", priority: 50 },
+  { id: "cleanup", label: "清理邮件", route: "cleanup", priority: 60 }
+]);
+
 export class HermesPluginService {
   private readonly workspaces: HermesWorkspaceRepository;
   private readonly authorization: AuthorizationService;
@@ -96,7 +105,14 @@ export class HermesPluginService {
       permissions: {
         register_workspace_requires: ["owners:write", "admin:*"],
         owner_token_scopes: ["mail:read", "mail:write", "accounts:write", "sync:read"]
-      }
+      },
+      actions: HERMES_PLUGIN_ACTIONS.map((action) => ({
+        id: action.id,
+        label: action.label,
+        placement: ["plugin_drawer_frequent", "dock_long_press", "search"],
+        priority: action.priority,
+        entry: { type: "plugin_route", pluginRoute: action.route }
+      }))
     };
   }
 
