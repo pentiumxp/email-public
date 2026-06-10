@@ -1,5 +1,45 @@
 # Email Plugin Handoff
 
+## Latest Update - 2026-06-10 Pagination Fix
+
+- Investigated message-list pagination after reports that scrolling to the
+  bottom and the manual `Load 50 more messages` button could stop appending
+  messages.
+- Reproduced against the live local Email service:
+  - `GET /api/messages?...offset=0` returned 50 rows and `hasMore=true`;
+  - `offset=50` returned 50 rows and appended to 100;
+  - `offset=100` returned HTTP 200, but the UI stayed at 100 rows and kept
+    showing `Loading 50 more messages`.
+- Root cause:
+  - `loadMessages()` incremented `messageRequestSeq` before checking the
+    append-loading guard;
+  - an extra scroll event fired while an append request was already in flight;
+  - the guarded no-op call still advanced the request sequence and caused the
+    real in-flight page response to be treated as stale.
+- Fix:
+  - move `messageRequestSeq` increment until after guard checks and after the
+    request is known to be valid;
+  - add a UI regression test that clicks the manual load button, fires a
+    duplicate scroll event during the pending request, then verifies the second
+    page still appends and loading clears.
+- Verification:
+  - `npm exec vitest run tests/ui-account-switcher.test.tsx` passed: 1 file / 5 tests;
+  - `npm run check` passed: build plus 15 test files / 46 tests;
+  - Playwright with the patched bundle against the real `127.0.0.1:5175` API
+    loaded `offset=0`, `offset=50`, and `offset=100`, rendered 135 rows, and
+    cleared the load-more status.
+- Mac production deployment:
+  - deployed with Home AI central deploy script from source commit
+    `88d04e0c9f51` plus classified dirty files `web/src/ui/App.tsx` and
+    `tests/ui-account-switcher.test.tsx`;
+  - backup path:
+    `/Users/hermes-host/HermesMobile/backups/deploy/20260610T021119Z-plugin-email-manual`;
+  - `system/com.hermesmobile.plugin.email` restarted and reported running;
+  - `http://127.0.0.1:5175/api/app-version` returned version `v-6e204df7`;
+  - production Playwright smoke loaded bundle `index-Dgqqfsxo.js`, requested
+    `offset=0`, `offset=50`, and `offset=100`, rendered 135 rows, cleared the
+    load-more status, and reported no console errors or horizontal overflow.
+
 ## Latest Update - 2026-06-10
 
 - Added MCP bulk local cleanup tools:

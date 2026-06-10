@@ -151,6 +151,7 @@ describe("mail account quick switcher", () => {
 
   it("keeps a tap target for loading the next 50 messages when device scroll events are unreliable", async () => {
     const requests: string[] = [];
+    let resolveSecondPage: ((value: Response) => void) | null = null;
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       requests.push(url);
@@ -164,7 +165,9 @@ describe("mail account quick switcher", () => {
         return jsonResponse({ messages: [message("m1")], hasMore: true, nextOffset: 50 });
       }
       if (url.includes("/api/messages") && url.includes("offset=50")) {
-        return jsonResponse({ messages: [message("m2")], hasMore: false, nextOffset: 100 });
+        return new Promise<Response>((resolve) => {
+          resolveSecondPage = resolve;
+        });
       }
       if (url.includes("/api/messages/m")) {
         return jsonResponse({ message: { ...message("m1"), bodyText: "Synthetic body", attachments: [] } });
@@ -184,8 +187,16 @@ describe("mail account quick switcher", () => {
     await act(async () => {
       document.querySelector<HTMLButtonElement>(".load-more-button")?.click();
     });
+    await act(async () => {
+      document.querySelector<HTMLDivElement>(".message-list")?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
 
     await waitFor(() => expect(requests.some((url) => url.includes("offset=50"))).toBe(true));
+    await act(async () => {
+      resolveSecondPage?.(jsonResponse({ messages: [message("m2")], hasMore: false, nextOffset: 100 }));
+    });
+    await waitFor(() => expect(document.querySelectorAll(".message-row")).toHaveLength(2));
+    expect(document.querySelector(".load-more-status")?.textContent || "").not.toContain("Loading 50 more messages");
   });
 });
 

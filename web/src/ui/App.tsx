@@ -209,7 +209,6 @@ export function App() {
   async function loadMessages(input: { searchQuery?: string; reset?: boolean } = {}) {
     const searchQuery = input.searchQuery ?? query;
     const reset = input.reset ?? false;
-    const requestId = ++messageRequestSeq.current;
     const offset = reset ? 0 : messageOffset;
     if (reset) {
       setListState("loading");
@@ -225,6 +224,7 @@ export function App() {
     if (!searchQuery.trim() && !activeFolderId) {
       return;
     }
+    const requestId = ++messageRequestSeq.current;
     const params = new URLSearchParams({ limit: String(MESSAGE_PAGE_SIZE), offset: String(offset) });
     if (searchQuery.trim()) {
       params.set("query", searchQuery.trim());
