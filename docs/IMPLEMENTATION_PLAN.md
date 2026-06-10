@@ -140,6 +140,8 @@ Implement read-only tools first:
 - `email.list_attachments` complete with metadata only.
 - `email.sync_account` exists as a read-only compatibility diagnostic; provider sync side effects remain outside MCP.
 - `email.apply_mail_action` supports audited local-only `delete_local` tombstones. It does not call remote providers.
+- `email.delete_local_by_search` supports dry-run-by-default query cleanup with include/exclude safeguards, bounded samples, sender breakdown, and local-only tombstones.
+- `email.apply_mail_action_bulk` supports dry-run-by-default `delete_local` over a bounded message id list.
 
 Entrypoint:
 
@@ -160,6 +162,7 @@ Tests:
 - read tools reuse launch-session authorization and filter by allowed account ids;
 - missing MCP session context fails closed;
 - local delete writes an audit row and returns `remoteApplied: false`;
+- bulk local delete defaults to dry-run, filters by session account visibility, supports exclude keywords, caps the operation at 1000 candidates, and returns bounded summaries only;
 - write tools require explicit enablement.
 
 ## Phase 5: Web UI

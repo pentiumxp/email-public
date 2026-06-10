@@ -1,5 +1,67 @@
 # Email Plugin Handoff
 
+## Latest Update - 2026-06-10
+
+- Added MCP bulk local cleanup tools:
+  - `email.delete_local_by_search`;
+  - alias support: `email_delete_local_by_search`, `mcp_email_delete_local_by_search`;
+  - `email.apply_mail_action_bulk`;
+  - alias support: `email_apply_mail_action_bulk`, `mcp_email_apply_mail_action_bulk`.
+- Behavior:
+  - both tools default to `dry_run=true`;
+  - only `delete_local` is supported;
+  - deletion writes local tombstones and `mail_actions` audit rows only;
+  - provider-side delete/archive/move/send/reply remains unsupported;
+  - outputs include counts, bounded samples, skip reasons, and sender breakdowns only;
+  - raw bodies, raw MIME, attachments, provider tokens, provider passwords, local paths, and provider logs are not returned.
+- Search-based cleanup supports:
+  - query terms with quoted phrases and `OR`;
+  - optional `folderId`;
+  - `limit` default 500 and max 1000;
+  - `include_sender`, `include_subject`, `exclude_keywords`;
+  - `older_than_days`, `newer_than_days`.
+- Bulk message-id cleanup supports:
+  - up to 1000 local message ids;
+  - session account visibility filtering;
+  - missing/already-deleted/out-of-scope messages reported as skipped samples.
+- Added focused MCP tests covering:
+  - new tool schema names;
+  - dry-run search does not delete;
+  - exclude keyword skip reasons;
+  - explicit `dry_run=false` applies local tombstones and audit rows;
+  - bulk message-id dry-run default and allowed-account filtering.
+- Updated docs:
+  - `docs/MCP_CONTRACT.md`;
+  - `docs/SECURITY_PRIVACY.md`;
+  - `docs/IMPLEMENTATION_PLAN.md`;
+  - `docs/HARNESS_AND_DOCS_RULES.md`.
+- AI Ops v2:
+  - intake run classified the task as H1 for MCP/schema work;
+  - required-check selection was run for changed files, but plugin absolute paths were classified conservatively as generic H3, so Email-local H1/MCP harness rules were followed.
+- Verification:
+  - `npm exec vitest run tests/email-mcp-service.test.ts tests/architecture-boundary.test.ts` passed: 2 files / 14 tests;
+  - `npm run check` passed: build plus 15 test files / 46 tests;
+  - `git diff --check` passed;
+  - AI Ops evidence ledger updated at `$HOME/.homeai-qa/email-evidence-ledger.jsonl` with focused and aggregate test records.
+- Mac production deployment:
+  - Email plugin deployed with Home AI central deploy script from source commit `30637a19ef71` plus classified dirty files for this MCP bulk-delete change;
+  - Email backup path: `/Users/hermes-host/HermesMobile/backups/deploy/20260610T015310Z-plugin-email-manual`;
+  - Email source sync excluded `.agent-context/`, secrets, data, and `runtime/`;
+  - `system/com.hermesmobile.plugin.email` restarted and reported running;
+  - Email health URL `http://127.0.0.1:5175/api/app-version` returned version `v-38589920`;
+  - direct production Email MCP `tools/list` includes `email.delete_local_by_search` and `email.apply_mail_action_bulk`;
+  - direct production no-session call to `email.delete_local_by_search` fails closed with `email_mcp_session_denied`.
+- Home AI / Gateway production closure for the new MCP callable names:
+  - Home AI `scripts/email-mcp-wrapper.py`, `adapters/gateway-run-instruction-service.js`, and `mobile-server-runtime.js` were updated so Gateway exposes `mcp_email_delete_local_by_search` and `mcp_email_apply_mail_action_bulk`;
+  - Home AI schema epoch updated to `20260610-email-bulk-local-delete-mcp-v1`;
+  - central deploy script was also fixed to exclude plugin `runtime/` during plugin deploys;
+  - Home AI source was deployed from staging path `/Users/hermes-dev/HermesMobileDev/.deploy-staging/homeai-email-bulk-mcp-deploy` to avoid unrelated dirty UI/Growth files in the app worktree;
+  - Home AI backup path: `/Users/hermes-host/HermesMobile/backups/deploy/20260610T015712Z-home-ai-manual`;
+  - `system/com.hermesmobile.listener` restarted and production status smoke passed with client version `20260609-dark-growth-surfaces-v679`;
+  - Gateway worker wrapper at `/Users/hermes-host/HermesMobile/gateway-worker/email-mcp/scripts/email-mcp-wrapper.py` was synchronized from the deployed app wrapper and now reports 10 Email tools;
+  - selected worker `hm-owner-openai-1` / `system/com.hermesmobile.gateway.hm-owner.openai.1` was restarted;
+  - production native Gateway schema smoke for `hm-owner-openai-1` passed with required tools including `mcp_email_delete_local_by_search` and `mcp_email_apply_mail_action_bulk`.
+
 ## Current Status - 2026-05-31
 
 - Workspace initialized manually because the referenced Agent initialization script was not present at `C:\Users\xuxin\Documents\Agent\scripts\powershell\initialize-workspace-context.ps1`.

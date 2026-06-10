@@ -40,6 +40,16 @@ export interface MailMessageRecord {
   isDeleted?: boolean;
 }
 
+export interface MailMessageSearchInput {
+  accountIds: string[];
+  query?: string;
+  folderId?: string;
+  receivedBefore?: string;
+  receivedAfter?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface MailMessageBodyRecord {
   messageId: string;
   sanitizedExcerpt: string;
@@ -313,6 +323,47 @@ export class MessageRepository {
        ORDER BY received_at DESC
        LIMIT ? OFFSET ?`
     ).all(...accountIds, pattern, pattern, pattern, limit, offset).map(mapMessageRow);
+  }
+
+  searchForAccountsAdvanced(input: MailMessageSearchInput): MailMessageRecord[] {
+    const { accountIds } = input;
+    if (accountIds.length === 0) {
+      return [];
+    }
+    const params: Array<string | number> = [];
+    const where = ["is_deleted = 0"];
+    where.push(`account_id IN (${accountIds.map(() => "?").join(",")})`);
+    params.push(...accountIds);
+
+    const terms = parseSearchTerms(input.query);
+    if (terms.length > 0) {
+      const termClauses = terms.map(() => "(subject LIKE ? OR sender_display LIKE ? OR sender_address_bounded LIKE ?)");
+      where.push(`(${termClauses.join(" OR ")})`);
+      for (const term of terms) {
+        const pattern = `%${term}%`;
+        params.push(pattern, pattern, pattern);
+      }
+    }
+    if (input.folderId) {
+      where.push("folder_id = ?");
+      params.push(input.folderId);
+    }
+    if (input.receivedBefore) {
+      where.push("received_at < ?");
+      params.push(input.receivedBefore);
+    }
+    if (input.receivedAfter) {
+      where.push("received_at > ?");
+      params.push(input.receivedAfter);
+    }
+
+    params.push(input.limit ?? 100, input.offset ?? 0);
+    return this.db.prepare(
+      `SELECT * FROM mail_messages
+       WHERE ${where.join(" AND ")}
+       ORDER BY received_at DESC
+       LIMIT ? OFFSET ?`
+    ).all(...params).map(mapMessageRow);
   }
 
   countByFolder(folderId: string): number {
@@ -618,6 +669,23 @@ function mapMessageRow(row: Record<string, unknown>): MailMessageRecord {
     bodyState: String(row.body_state),
     isDeleted: Number(row.is_deleted) === 1
   };
+}
+
+function parseSearchTerms(query: string | undefined): string[] {
+  if (!query?.trim()) {
+    return [];
+  }
+  const terms: string[] = [];
+  const pattern = /"([^"]+)"|'([^']+)'|\bOR\b|([^\s]+)/gi;
+  for (const match of query.matchAll(pattern)) {
+    const raw = match[1] ?? match[2] ?? match[3] ?? "";
+    const term = raw.trim();
+    if (!term || /^OR$/i.test(term)) {
+      continue;
+    }
+    terms.push(term);
+  }
+  return [...new Set(terms.map((term) => term.toLowerCase()))];
 }
 
 function mapPluginUserRow(row: Record<string, unknown>): PluginUserRecord {

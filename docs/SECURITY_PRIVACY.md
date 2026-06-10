@@ -80,7 +80,9 @@ MCP outputs should default to summaries and metadata. Full body access, attachme
 
 Current MCP detail output returns bounded sanitized excerpts plus attachment metadata only. It does not return raw MIME, attachment content, provider tokens, provider passwords, local file paths, or the full local body field.
 
-The V1 MCP local delete action only writes a local tombstone and audit row. It must not call remote mailbox providers or imply that provider-side mail was deleted.
+The V1 MCP local delete actions only write local tombstones and audit rows. They must not call remote mailbox providers or imply that provider-side mail was deleted.
+
+Bulk MCP local delete tools must default to `dry_run=true`. They may return counts, bounded message metadata samples, skip reasons, and sender breakdowns, but must not return full message bodies, raw MIME, attachments, local paths, provider tokens, provider passwords, or provider logs. Search-based bulk deletion must support `exclude_keywords` so callers can skip receipts, invoices, orders, verification/security messages, school messages, and business-report mail before any tombstone is written.
 
 ## Hermes Mobile Privacy Boundary
 

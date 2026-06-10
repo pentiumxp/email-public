@@ -1,4 +1,5 @@
 import { AuthorizationService, type AuthContext } from "./authorization-service";
+import { MailboxBulkActionService } from "./mailbox-bulk-action-service";
 import { MailboxActionService } from "./mailbox-action-service";
 import { MailboxReadService } from "./mailbox-read-service";
 import type { AttachmentSummary, MessageDetail } from "./privacy-projection-service";
@@ -29,6 +30,19 @@ interface ToolInput {
   limit?: number;
   offset?: number;
   action?: string;
+  messageIds?: string[];
+  dry_run?: boolean;
+  dryRun?: boolean;
+  include_sender?: string[];
+  includeSender?: string[];
+  include_subject?: string[];
+  includeSubject?: string[];
+  exclude_keywords?: string[];
+  excludeKeywords?: string[];
+  older_than_days?: number | null;
+  olderThanDays?: number | null;
+  newer_than_days?: number | null;
+  newerThanDays?: number | null;
 }
 
 const TOOL_ALIASES: Record<string, string> = {
@@ -53,17 +67,25 @@ const TOOL_ALIASES: Record<string, string> = {
   "email.apply_mail_action": "email.apply_mail_action",
   email_apply_mail_action: "email.apply_mail_action",
   "email.delete_message": "email.apply_mail_action",
-  email_delete_message: "email.apply_mail_action"
+  email_delete_message: "email.apply_mail_action",
+  "email.delete_local_by_search": "email.delete_local_by_search",
+  email_delete_local_by_search: "email.delete_local_by_search",
+  mcp_email_delete_local_by_search: "email.delete_local_by_search",
+  "email.apply_mail_action_bulk": "email.apply_mail_action_bulk",
+  email_apply_mail_action_bulk: "email.apply_mail_action_bulk",
+  mcp_email_apply_mail_action_bulk: "email.apply_mail_action_bulk"
 };
 
 export class EmailMcpService {
   private readonly authorization: AuthorizationService;
   private readonly actions: MailboxActionService;
+  private readonly bulkActions: MailboxBulkActionService;
   private readonly mailbox: MailboxReadService;
 
   constructor(db: SqliteDatabase) {
     this.authorization = new AuthorizationService(db);
     this.actions = new MailboxActionService(db);
+    this.bulkActions = new MailboxBulkActionService(db);
     this.mailbox = new MailboxReadService(db);
   }
 
@@ -147,6 +169,40 @@ export class EmailMcpService {
           },
           required: ["action", "messageId"]
         }
+      },
+      {
+        name: "email.delete_local_by_search",
+        description: "Dry-run by default. Search visible local mail, apply include/exclude safeguards, and optionally tombstone matching messages locally.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            ...sessionProperties(),
+            query: { type: "string" },
+            folderId: { type: "string" },
+            limit: { type: "number", minimum: 1, maximum: 1000, default: 500 },
+            dry_run: { type: "boolean", default: true },
+            include_sender: { type: "array", items: { type: "string" } },
+            include_subject: { type: "array", items: { type: "string" } },
+            exclude_keywords: { type: "array", items: { type: "string" } },
+            older_than_days: { type: ["number", "null"], minimum: 0 },
+            newer_than_days: { type: ["number", "null"], minimum: 0 }
+          },
+          required: ["query"]
+        }
+      },
+      {
+        name: "email.apply_mail_action_bulk",
+        description: "Dry-run by default. Apply an audited local-only action to a bounded list of message ids. V1 supports delete_local only.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            ...sessionProperties(),
+            action: { type: "string", enum: ["delete_local"] },
+            messageIds: { type: "array", items: { type: "string" }, maxItems: 1000 },
+            dry_run: { type: "boolean", default: true }
+          },
+          required: ["action", "messageIds"]
+        }
       }
     ];
   }
@@ -179,6 +235,10 @@ export class EmailMcpService {
         return this.syncAccount(context, input);
       case "email.apply_mail_action":
         return this.applyMailAction(context, input);
+      case "email.delete_local_by_search":
+        return this.deleteLocalBySearch(context, input);
+      case "email.apply_mail_action_bulk":
+        return this.applyMailActionBulk(context, input);
       default:
         return { ok: false, error: "unknown_email_mcp_tool", tool: name };
     }
@@ -296,6 +356,28 @@ export class EmailMcpService {
       localOnly: true
     };
   }
+
+  private deleteLocalBySearch(context: AuthContext, input: ToolInput): EmailMcpCallResult {
+    return this.bulkActions.deleteLocalBySearch(context, {
+      query: input.query ?? "",
+      folderId: input.folderId,
+      limit: input.limit,
+      dryRun: normalizeDryRun(input),
+      includeSender: input.include_sender ?? input.includeSender,
+      includeSubject: input.include_subject ?? input.includeSubject,
+      excludeKeywords: input.exclude_keywords ?? input.excludeKeywords,
+      olderThanDays: input.older_than_days ?? input.olderThanDays,
+      newerThanDays: input.newer_than_days ?? input.newerThanDays
+    });
+  }
+
+  private applyMailActionBulk(context: AuthContext, input: ToolInput): EmailMcpCallResult {
+    return this.bulkActions.applyMailActionBulk(context, {
+      action: input.action ?? "",
+      messageIds: input.messageIds ?? [],
+      dryRun: normalizeDryRun(input)
+    });
+  }
 }
 
 function sessionProperties(): Record<string, unknown> {
@@ -313,6 +395,10 @@ function boundedLimit(value: unknown): number {
 
 function boundedOffset(value: unknown): number {
   return Math.max(Number(value ?? 0) || 0, 0);
+}
+
+function normalizeDryRun(input: ToolInput): boolean {
+  return input.dry_run ?? input.dryRun ?? true;
 }
 
 function projectMcpMessageDetail(message: MessageDetail) {

@@ -18,7 +18,9 @@ describe("EmailMcpService", () => {
       "email.get_message",
       "email.get_digest",
       "email.sync_account",
-      "email.apply_mail_action"
+      "email.apply_mail_action",
+      "email.delete_local_by_search",
+      "email.apply_mail_action_bulk"
     ]));
   });
 
@@ -138,6 +140,109 @@ describe("EmailMcpService", () => {
     });
   });
 
+  it("dry-runs local delete by search with exclude safeguards and bounded samples", () => {
+    const db = openMailDatabase();
+    runMigrations(db);
+    seedAccount(db, "acct-a", "folder-a", "msg-cathay-sale", "Cathay Pacific special offer", {
+      senderAddressBounded: "news@cathaypacific.com"
+    });
+    seedAccount(db, "acct-a", "folder-a", "msg-cathay-invoice", "Cathay Pacific invoice", {
+      senderAddressBounded: "booking@cathaypacific.com"
+    });
+    seedAccount(db, "acct-b", "folder-b", "msg-blocked", "Cathay Pacific special offer", {
+      senderAddressBounded: "news@cathaypacific.com"
+    });
+    const session = new AuthorizationService(db).createLaunchSession({
+      workspaceId: "workspace-1",
+      userId: "user-1",
+      role: "member",
+      allowedAccountIds: ["acct-a"]
+    });
+
+    const result = new EmailMcpService(db).callTool("mcp_email_delete_local_by_search", {
+      sessionToken: session.token,
+      query: "Cathay OR \"Cathay Pacific\" OR 国泰航空",
+      dry_run: true,
+      limit: 500,
+      exclude_keywords: ["invoice", "收据"]
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      matched_count: 2,
+      would_delete_count: 1,
+      deleted_count: 0,
+      skipped_count: 1,
+      remoteApplied: false,
+      action: "delete_local",
+      dry_run: true
+    });
+    expect(result.sample_deleted).toEqual([expect.objectContaining({ messageId: "msg-cathay-sale", subject: "Cathay Pacific special offer" })]);
+    expect(result.skipped_samples).toEqual([expect.objectContaining({ messageId: "msg-cathay-invoice", reason: "matched exclude keyword: invoice" })]);
+    expect(result.sender_breakdown).toEqual({ "news@cathaypacific.com": 1 });
+    expect(db.prepare("SELECT is_deleted FROM mail_messages WHERE id = 'msg-cathay-sale'").get()).toEqual({ is_deleted: 0 });
+  });
+
+  it("applies local delete by search only when dry_run is explicitly false", () => {
+    const db = openMailDatabase();
+    runMigrations(db);
+    seedAccount(db, "acct-a", "folder-a", "msg-family-a", "Microsoft Family Safety activity report", {
+      senderAddressBounded: "family-safety-noreply@microsoft.com"
+    });
+    seedAccount(db, "acct-a", "folder-a", "msg-family-b", "Family Safety screen time", {
+      senderAddressBounded: "family-safety-noreply@microsoft.com"
+    });
+    const session = new AuthorizationService(db).createLaunchSession({
+      workspaceId: "workspace-1",
+      userId: "user-1",
+      role: "member",
+      allowedAccountIds: ["acct-a"]
+    });
+
+    const deleted = new EmailMcpService(db).callTool("email.delete_local_by_search", {
+      sessionToken: session.token,
+      query: "\"Microsoft Family Safety\" OR \"Family Safety\" OR \"screen time\"",
+      dry_run: false
+    });
+
+    expect(deleted).toMatchObject({ ok: true, matched_count: 2, would_delete_count: 2, deleted_count: 2, remoteApplied: false, dry_run: false });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM mail_messages WHERE is_deleted = 1").get()).toEqual({ count: 2 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM mail_actions WHERE action_type = 'local_delete_tombstone'").get()).toEqual({ count: 2 });
+  });
+
+  it("applies bulk local delete by message ids with dry-run default and account filtering", () => {
+    const db = openMailDatabase();
+    runMigrations(db);
+    seedAccount(db, "acct-a", "folder-a", "msg-a1", "Allowed sale");
+    seedAccount(db, "acct-a", "folder-a", "msg-a2", "Allowed newsletter");
+    seedAccount(db, "acct-b", "folder-b", "msg-b1", "Blocked sale");
+    const session = new AuthorizationService(db).createLaunchSession({
+      workspaceId: "workspace-1",
+      userId: "user-1",
+      role: "member",
+      allowedAccountIds: ["acct-a"]
+    });
+    const service = new EmailMcpService(db);
+
+    const dryRun = service.callTool("email.apply_mail_action_bulk", {
+      sessionToken: session.token,
+      action: "delete_local",
+      messageIds: ["msg-a1", "msg-b1", "missing"]
+    });
+    expect(dryRun).toMatchObject({ ok: true, matched_count: 3, would_delete_count: 1, deleted_count: 0, skipped_count: 2, dry_run: true });
+    expect(dryRun.skipped_samples).toContainEqual(expect.objectContaining({ messageId: "msg-b1", subject: "", reason: "message outside allowed accounts" }));
+    expect(db.prepare("SELECT is_deleted FROM mail_messages WHERE id = 'msg-a1'").get()).toEqual({ is_deleted: 0 });
+
+    const deleted = service.callTool("mcp_email_apply_mail_action_bulk", {
+      sessionToken: session.token,
+      action: "delete_local",
+      messageIds: ["msg-a1", "msg-a2"],
+      dry_run: false
+    });
+    expect(deleted).toMatchObject({ ok: true, matched_count: 2, would_delete_count: 2, deleted_count: 2, skipped_count: 0, remoteApplied: false });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM mail_messages WHERE account_id = 'acct-a' AND is_deleted = 1").get()).toEqual({ count: 2 });
+  });
+
   it("handles MCP initialize, tools/list, and tools/call over line JSON-RPC", () => {
     const db = openMailDatabase();
     runMigrations(db);
@@ -155,6 +260,7 @@ describe("EmailMcpService", () => {
 
     const listed = JSON.parse(handleMcpJsonRpcLine(service, JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }))!);
     expect(listed.result.tools.map((tool: { name: string }) => tool.name)).toContain("email.search_messages");
+    expect(listed.result.tools.map((tool: { name: string }) => tool.name)).toContain("email.delete_local_by_search");
 
     const called = JSON.parse(handleMcpJsonRpcLine(service, JSON.stringify({
       jsonrpc: "2.0",
@@ -167,7 +273,14 @@ describe("EmailMcpService", () => {
   });
 });
 
-function seedAccount(db: ReturnType<typeof openMailDatabase>, accountId: string, folderId: string, messageId: string, subject: string) {
+function seedAccount(
+  db: ReturnType<typeof openMailDatabase>,
+  accountId: string,
+  folderId: string,
+  messageId: string,
+  subject: string,
+  options: { senderDisplay?: string; senderAddressBounded?: string; receivedAt?: string } = {}
+) {
   const accounts = new AccountRepository(db);
   const folders = new FolderRepository(db);
   const messages = new MessageRepository(db);
@@ -180,9 +293,9 @@ function seedAccount(db: ReturnType<typeof openMailDatabase>, accountId: string,
     provider: "gmail",
     providerMessageId: `provider-${messageId}`,
     subject,
-    senderDisplay: "Sender",
-    senderAddressBounded: "sender@example.local",
-    receivedAt: "2026-05-31T00:00:00.000Z",
+    senderDisplay: options.senderDisplay ?? "Sender",
+    senderAddressBounded: options.senderAddressBounded ?? "sender@example.local",
+    receivedAt: options.receivedAt ?? "2026-05-31T00:00:00.000Z",
     isRead: false,
     hasAttachments: false,
     attachmentCount: 0,

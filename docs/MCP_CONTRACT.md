@@ -4,7 +4,7 @@
 
 Expose email data to Hermes Mobile through bounded tools. The MCP server should let Hermes search and analyze local mail without handling provider OAuth tokens or polling remote mailboxes.
 
-Default MCP tools are read-only except the explicitly documented local-only delete tombstone action. Additional write tools require explicit enablement, audit, and confirmation.
+Default MCP tools are read-only except the explicitly documented local-only delete tombstone actions. Additional write tools require explicit enablement, audit, and confirmation.
 
 ## Authorization Context
 
@@ -26,6 +26,7 @@ Rules:
 - Admin status tooling may expose account/provider health and counts, but not other users' full message bodies by default.
 - Write tools, if enabled later, must require both account visibility and explicit write capability.
 - Local-only delete tombstones must verify message ownership through the current session and write an audit row.
+- Bulk local delete tools must default to `dry_run=true`, cap the candidate set, return bounded samples/breakdowns only, and report `remoteApplied=false`.
 
 Current implementation status:
 
@@ -240,6 +241,83 @@ Aliases:
 - `email_apply_mail_action`
 - `email.delete_message`
 - `email_delete_message`
+
+### `email.delete_local_by_search`
+
+Searches visible local mail, applies include/exclude safeguards inside the Email plugin, and optionally applies local tombstone deletion. The tool is designed to avoid returning every message to the Agent for per-message judgment.
+
+Input:
+
+- required `sessionToken`, unless the host supplies `EMAIL_MCP_SESSION_TOKEN`
+- `query`: search text. Quoted phrases and `OR` separators are accepted.
+- optional `folderId`
+- optional `limit`, default `500`, clamped to `1..1000`
+- optional `dry_run`, default `true`
+- optional `include_sender`: sender/domain contains list
+- optional `include_subject`: subject contains list
+- optional `exclude_keywords`: subject/sender safety keywords that skip a matched message
+- optional `older_than_days`
+- optional `newer_than_days`
+
+Output:
+
+- `matched_count`: visible messages found by query and date/folder scope within the limit;
+- `would_delete_count`: messages remaining after include/exclude filters;
+- `deleted_count`: actual local tombstones written; always `0` during dry run;
+- `skipped_count`;
+- `remoteApplied: false`;
+- `action: delete_local`;
+- `dry_run`;
+- `sample_deleted`: bounded metadata samples for messages that would be or were deleted;
+- `skipped_samples`: bounded metadata samples with skip reasons;
+- `sender_breakdown`: bounded sender counts for messages that would be or were deleted.
+
+Rules:
+
+- default behavior is dry run; deletion requires explicit `dry_run=false`;
+- only local tombstones are supported;
+- never calls Gmail, Outlook, AliMail, IMAP, SMTP, or any provider delete API;
+- never returns raw bodies, raw MIME, attachments, local paths, provider tokens, or full provider payloads;
+- verifies the current session's allowed account ids before searching.
+
+Aliases:
+
+- `email_delete_local_by_search`
+- `mcp_email_delete_local_by_search`
+
+### `email.apply_mail_action_bulk`
+
+Applies a local-only action to a bounded list of message ids. V1 supports only `delete_local`.
+
+Input:
+
+- required `sessionToken`, unless the host supplies `EMAIL_MCP_SESSION_TOKEN`
+- `action`: `delete_local`
+- `messageIds`: array of local message ids, capped at `1000`
+- optional `dry_run`, default `true`
+
+Output:
+
+- `matched_count`;
+- `would_delete_count`;
+- `deleted_count`;
+- `skipped_count`;
+- `remoteApplied: false`;
+- `action: delete_local`;
+- `dry_run`;
+- bounded `sample_deleted`, `skipped_samples`, and `sender_breakdown`.
+
+Rules:
+
+- default behavior is dry run; deletion requires explicit `dry_run=false`;
+- only messages inside the current session's allowed account ids are eligible;
+- each real deletion writes the same `mail_actions` audit row as `email.apply_mail_action`;
+- remote provider delete is not supported.
+
+Aliases:
+
+- `email_apply_mail_action_bulk`
+- `mcp_email_apply_mail_action_bulk`
 
 ## Later Remote Write Tools
 

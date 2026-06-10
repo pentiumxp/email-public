@@ -109,6 +109,7 @@ This command covers:
 - bounded message detail output without raw full body fields;
 - attachment metadata only;
 - local-only delete tombstone writes an audit row, removes the message from normal reads, and reports `remoteApplied=false`;
+- bulk local delete tools default to dry-run, enforce session account visibility, support exclude keywords, cap candidates, and return bounded samples/sender breakdowns;
 - stdio JSON-RPC initialize, tools/list, and tools/call smoke;
 - boundary checks that the stdio entrypoint stays protocol glue.
 
