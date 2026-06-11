@@ -1,5 +1,32 @@
 # Email Plugin Handoff
 
+## Latest Update - 2026-06-11 Narrow Desktop Detail Fix
+
+- Investigated a report that clicking an email in a desktop browser did not
+  enter/show the message detail.
+- Reproduced the issue at a 900px desktop viewport against the live local Email
+  service:
+  - row click set `.mail-shell.detail-open`;
+  - `/api/messages/:id` returned HTTP 200 and `.message-detail` existed in the
+    DOM;
+  - `.reading-pane` still computed to `display: none`, so the detail was not
+    visible.
+- Root cause:
+  - the `@media (max-width: 980px)` desktop/tablet breakpoint hid
+    `.reading-pane`;
+  - only the `@media (max-width: 720px)` mobile breakpoint restored
+    `.reading-pane` for `.detail-open`.
+- Fix:
+  - add `.mail-shell.detail-open` rules at the 980px breakpoint so row clicks
+    hide the message list pane and show the reading pane.
+- Verification:
+  - `npm exec vitest run tests/ui-account-switcher.test.tsx` passed: 1 file / 7 tests;
+  - `npm run check` passed: build plus 15 test files / 48 tests;
+  - Playwright smoke against the patched build at 900px confirmed
+    `.reading-pane` computed to `display: grid`, `.message-pane` computed to
+    `display: none`, detail API requests returned HTTP 200, and no console
+    errors were reported.
+
 ## Latest Update - 2026-06-10 Pagination Fix
 
 - Investigated message-list pagination after reports that scrolling to the

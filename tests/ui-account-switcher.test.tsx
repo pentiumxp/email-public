@@ -73,6 +73,16 @@ describe("mail account quick switcher", () => {
     expect(css).toContain("flex-basis: calc((100% - 16px) / 3);");
   });
 
+  it("shows message detail after row clicks on narrow desktop browsers", () => {
+    const css = readFileSync(join(process.cwd(), "web/src/styles.css"), "utf8");
+    const narrowDesktopStart = css.indexOf("@media (max-width: 980px)");
+    const mobileStart = css.indexOf("@media (max-width: 720px)");
+    const narrowDesktopBlock = css.slice(narrowDesktopStart, mobileStart);
+    expect(narrowDesktopBlock).toContain(".mail-shell.detail-open .message-pane");
+    expect(narrowDesktopBlock).toContain(".mail-shell.detail-open .reading-pane");
+    expect(narrowDesktopBlock).toContain("display: grid;");
+  });
+
   it("defaults to the Qifan mailbox when it is present", async () => {
     const requests: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {

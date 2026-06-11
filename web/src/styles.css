@@ -756,6 +756,16 @@ p {
   .reading-pane {
     display: none;
   }
+
+  .mail-shell.detail-open .message-pane {
+    display: none;
+  }
+
+  .mail-shell.detail-open .reading-pane {
+    display: grid;
+    height: 100vh;
+    border-right: 0;
+  }
 }
 
 @media (max-width: 720px) {
