@@ -50,7 +50,8 @@ export function normalizeOutlookAttachment(messageId: string, attachment: GraphA
     filename: attachment.name || "attachment",
     contentType: attachment.contentType || null,
     sizeBytes: attachment.size || null,
-    availabilityState: "metadata-only"
+    availabilityState: "metadata-only",
+    providerAttachmentId: attachment.id
   };
 }
 

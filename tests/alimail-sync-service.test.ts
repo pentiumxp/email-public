@@ -27,8 +27,15 @@ describe("AliMailSyncService", () => {
             date: new Date("2026-05-31T00:00:00.000Z"),
             flags: [],
             text: "hello body",
-            hasAttachments: false,
-            attachmentCount: 0
+            hasAttachments: true,
+            attachmentCount: 1,
+            attachments: [{
+              index: 0,
+              filename: "alimail.txt",
+              contentType: "text/plain",
+              sizeBytes: 18,
+              content: Buffer.from("cached alimail attachment")
+            }]
           }]
         };
       }
@@ -37,6 +44,8 @@ describe("AliMailSyncService", () => {
     expect(await service.syncAll()).toMatchObject({ foldersSeen: 1, messagesSeen: 1, foldersChanged: 1 });
     expect(await service.syncAll()).toMatchObject({ foldersSeen: 1, messagesSeen: 0, foldersChanged: 0 });
     expect(db.prepare("SELECT provider, subject FROM mail_messages").get()).toEqual({ provider: "alimail", subject: "AliMail hello" });
+    expect(db.prepare("SELECT filename, availability_state FROM mail_attachments").get()).toEqual({ filename: "alimail.txt", availability_state: "cached-local" });
+    expect(db.prepare("SELECT size_bytes FROM mail_attachment_blobs").get()).toEqual({ size_bytes: 25 });
     expect(db.prepare("SELECT cursor, cursor_type FROM mail_sync_cursors").get()).toEqual({ cursor: "10", cursor_type: "imap-uid" });
   });
 });

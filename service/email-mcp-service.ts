@@ -3,6 +3,7 @@ import { MailboxBulkActionService } from "./mailbox-bulk-action-service";
 import { MailboxActionService } from "./mailbox-action-service";
 import { MailboxReadService } from "./mailbox-read-service";
 import type { AttachmentSummary, MessageDetail } from "./privacy-projection-service";
+import { ActionAuditRepository } from "../store/mail-repositories";
 import type { SqliteDatabase } from "../store/sqlite-store";
 
 export interface McpToolDefinition {
@@ -26,6 +27,8 @@ interface ToolInput {
   accountId?: string;
   folderId?: string;
   messageId?: string;
+  attachmentId?: string;
+  purpose?: string;
   query?: string;
   limit?: number;
   offset?: number;
@@ -57,11 +60,17 @@ const TOOL_ALIASES: Record<string, string> = {
   "email.get_message": "email.get_message",
   email_get_message: "email.get_message",
   email_get_message_summary: "email.get_message",
+  "email.get_message_body": "email.get_message_body",
+  email_get_message_body: "email.get_message_body",
+  mcp_email_get_message_body: "email.get_message_body",
   "email.get_digest": "email.get_digest",
   email_get_digest: "email.get_digest",
   email_list_recent_messages: "email.get_digest",
   "email.list_attachments": "email.list_attachments",
   email_list_attachments: "email.list_attachments",
+  "email.get_attachment_content": "email.get_attachment_content",
+  email_get_attachment_content: "email.get_attachment_content",
+  mcp_email_get_attachment_content: "email.get_attachment_content",
   "email.sync_account": "email.sync_account",
   email_sync_account: "email.sync_account",
   "email.apply_mail_action": "email.apply_mail_action",
@@ -79,12 +88,14 @@ const TOOL_ALIASES: Record<string, string> = {
 export class EmailMcpService {
   private readonly authorization: AuthorizationService;
   private readonly actions: MailboxActionService;
+  private readonly audit: ActionAuditRepository;
   private readonly bulkActions: MailboxBulkActionService;
   private readonly mailbox: MailboxReadService;
 
   constructor(db: SqliteDatabase) {
     this.authorization = new AuthorizationService(db);
     this.actions = new MailboxActionService(db);
+    this.audit = new ActionAuditRepository(db);
     this.bulkActions = new MailboxBulkActionService(db);
     this.mailbox = new MailboxReadService(db);
   }
@@ -128,6 +139,21 @@ export class EmailMcpService {
         }
       },
       {
+        name: "email.get_message_body",
+        description: "High-privilege read of cached sanitized message body text. Requires owner/admin session, purpose, and pagination.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            ...sessionProperties(),
+            messageId: { type: "string" },
+            purpose: { type: "string", minLength: 6 },
+            offset: { type: "number", minimum: 0 },
+            limit: { type: "number", minimum: 1, maximum: 20000, default: 8000 }
+          },
+          required: ["messageId", "purpose"]
+        }
+      },
+      {
         name: "email.get_digest",
         description: "Return recent bounded message summaries and simple counts for visible mailbox data.",
         inputSchema: {
@@ -142,11 +168,26 @@ export class EmailMcpService {
       },
       {
         name: "email.list_attachments",
-        description: "List attachment metadata for a message without returning attachment content.",
+        description: "List attachment metadata and local cache availability for a message without returning attachment content.",
         inputSchema: {
           type: "object",
           properties: { ...sessionProperties(), messageId: { type: "string" } },
           required: ["messageId"]
+        }
+      },
+      {
+        name: "email.get_attachment_content",
+        description: "High-privilege read of locally cached attachment content as a bounded base64 chunk. Never contacts providers.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            ...sessionProperties(),
+            attachmentId: { type: "string" },
+            purpose: { type: "string", minLength: 6 },
+            offset: { type: "number", minimum: 0 },
+            limit: { type: "number", minimum: 1, maximum: 262144, default: 65536 }
+          },
+          required: ["attachmentId", "purpose"]
         }
       },
       {
@@ -227,10 +268,14 @@ export class EmailMcpService {
         return this.searchMessages(context, input);
       case "email.get_message":
         return this.getMessage(context, input);
+      case "email.get_message_body":
+        return this.getMessageBody(context, input);
       case "email.get_digest":
         return this.getDigest(context, input);
       case "email.list_attachments":
         return this.listAttachments(context, input);
+      case "email.get_attachment_content":
+        return this.getAttachmentContent(context, input);
       case "email.sync_account":
         return this.syncAccount(context, input);
       case "email.apply_mail_action":
@@ -289,6 +334,51 @@ export class EmailMcpService {
     return { ok: true, message: projectMcpMessageDetail(message) };
   }
 
+  private getMessageBody(context: AuthContext, input: ToolInput): EmailMcpCallResult {
+    if (!input.messageId) {
+      return { ok: false, error: "email_message_id_required" };
+    }
+    if (!isHighPrivilegeContext(context)) {
+      return { ok: false, error: "email_mcp_full_content_capability_required" };
+    }
+    if (!input.purpose || input.purpose.trim().length < 6) {
+      return { ok: false, error: "email_mcp_purpose_required" };
+    }
+    const message = this.mailbox.getMessageBody(context, input.messageId);
+    if (!message) {
+      return { ok: false, error: "email_message_not_found" };
+    }
+    const offset = boundedOffset(input.offset);
+    const limit = boundedBodyLimit(input.limit);
+    const totalChars = message.bodyText.length;
+    const bodyText = message.bodyText.slice(offset, offset + limit);
+    const auditId = this.audit.record({
+      accountId: message.accountId,
+      messageId: input.messageId,
+      actionType: "mcp_full_body_read",
+      status: "read_local_sanitized_body"
+    });
+    return {
+      ok: true,
+      messageId: input.messageId,
+      accountId: message.accountId,
+      provider: message.provider,
+      subject: message.subject,
+      sender: message.sender,
+      receivedAt: message.receivedAt,
+      contentSource: message.contentSource,
+      bodyText,
+      offset,
+      limit,
+      returnedChars: bodyText.length,
+      totalChars,
+      truncated: offset + bodyText.length < totalChars,
+      fullBodyReturned: offset === 0 && bodyText.length === totalChars,
+      attachmentContentIncluded: false,
+      auditId
+    };
+  }
+
   private getDigest(context: AuthContext, input: ToolInput): EmailMcpCallResult {
     const messages = this.mailbox.listMessages(context, {
       folderId: input.folderId,
@@ -317,6 +407,56 @@ export class EmailMcpService {
       return { ok: false, error: "email_message_not_found" };
     }
     return { ok: true, messageId: input.messageId, attachments: projectMcpAttachments(message.attachments) };
+  }
+
+  private getAttachmentContent(context: AuthContext, input: ToolInput): EmailMcpCallResult {
+    if (!input.attachmentId) {
+      return { ok: false, error: "email_attachment_id_required" };
+    }
+    if (!isHighPrivilegeContext(context)) {
+      return { ok: false, error: "email_mcp_full_content_capability_required" };
+    }
+    if (!input.purpose || input.purpose.trim().length < 6) {
+      return { ok: false, error: "email_mcp_purpose_required" };
+    }
+    const result = this.mailbox.getAttachmentContent(context, input.attachmentId);
+    if (!result) {
+      return { ok: false, error: "email_attachment_not_found" };
+    }
+    if (!result.blob) {
+      return {
+        ok: false,
+        error: "email_attachment_content_unavailable",
+        attachmentId: input.attachmentId,
+        availabilityState: result.attachment.availabilityState
+      };
+    }
+    const offset = boundedOffset(input.offset);
+    const limit = boundedAttachmentLimit(input.limit);
+    const chunk = result.blob.content.subarray(offset, offset + limit);
+    const auditId = this.audit.record({
+      accountId: result.attachment.accountId,
+      messageId: result.attachment.messageId,
+      actionType: "mcp_attachment_read",
+      status: "read_local_attachment_chunk"
+    });
+    return {
+      ok: true,
+      attachmentId: input.attachmentId,
+      messageId: result.attachment.messageId,
+      filename: result.attachment.filename,
+      contentType: result.blob.contentType || result.attachment.contentType,
+      encoding: "base64",
+      data: chunk.toString("base64"),
+      offset,
+      limit,
+      returnedBytes: chunk.byteLength,
+      totalBytes: result.blob.sizeBytes,
+      truncated: offset + chunk.byteLength < result.blob.sizeBytes,
+      fullAttachmentReturned: offset === 0 && chunk.byteLength === result.blob.sizeBytes,
+      localOnly: true,
+      auditId
+    };
   }
 
   private syncAccount(context: AuthContext, input: ToolInput): EmailMcpCallResult {
@@ -393,6 +533,14 @@ function boundedLimit(value: unknown): number {
   return Math.min(Math.max(Number(value ?? 50) || 50, 1), 100);
 }
 
+function boundedBodyLimit(value: unknown): number {
+  return Math.min(Math.max(Number(value ?? 8000) || 8000, 1), 20000);
+}
+
+function boundedAttachmentLimit(value: unknown): number {
+  return Math.min(Math.max(Number(value ?? 65536) || 65536, 1), 262144);
+}
+
 function boundedOffset(value: unknown): number {
   return Math.max(Number(value ?? 0) || 0, 0);
 }
@@ -419,6 +567,10 @@ function projectMcpAttachments(attachments: AttachmentSummary[]) {
     sizeBytes: attachment.sizeBytes,
     availabilityState: attachment.availabilityState
   }));
+}
+
+function isHighPrivilegeContext(context: AuthContext): boolean {
+  return context.role === "owner" || context.role === "admin";
 }
 
 function clamp(value: string, max: number): string {

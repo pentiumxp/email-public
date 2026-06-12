@@ -80,6 +80,21 @@ MCP outputs should default to summaries and metadata. Full body access, attachme
 
 Current MCP detail output returns bounded sanitized excerpts plus attachment metadata only. It does not return raw MIME, attachment content, provider tokens, provider passwords, local file paths, or the full local body field.
 
+The dedicated `email.get_message_body` MCP tool is the current exception for
+cached sanitized body text. It is not part of the default detail projection: it
+requires a valid owner/admin launch session, an explicit per-call `purpose`,
+account visibility, pagination caps, and a local audit row. It returns only the
+local sanitized/indexed text slice already present in the Email cache and sets
+`attachmentContentIncluded=false`.
+
+Attachment content access is allowed only through the dedicated
+`email.get_attachment_content` MCP tool. Provider download happens during Email
+sync into the local Email runtime cache; MCP reads only that local cache. The
+tool requires owner/admin session context, explicit per-call `purpose`, account
+visibility through the parent message, byte pagination caps, and a local audit
+row. It returns base64 chunks and must not expose local filesystem paths,
+provider tokens, raw MIME, provider headers, or uncapped binary payloads.
+
 The V1 MCP local delete actions only write local tombstones and audit rows. They must not call remote mailbox providers or imply that provider-side mail was deleted.
 
 Bulk MCP local delete tools must default to `dry_run=true`. They may return counts, bounded message metadata samples, skip reasons, and sender breakdowns, but must not return full message bodies, raw MIME, attachments, local paths, provider tokens, provider passwords, or provider logs. Search-based bulk deletion must support `exclude_keywords` so callers can skip receipts, invoices, orders, verification/security messages, school messages, and business-report mail before any tombstone is written.

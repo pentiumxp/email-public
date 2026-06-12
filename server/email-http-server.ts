@@ -6,6 +6,7 @@ import { MailboxActionService } from "../service/mailbox-action-service";
 import { AppVersionService } from "../service/app-version-service";
 import { AuthorizationService, type AuthContext } from "../service/authorization-service";
 import { bearerToken, HermesPluginService, type LaunchRequestInput, type WorkspaceRegistrationInput } from "../service/hermes-plugin-service";
+import { ActionAuditRepository } from "../store/mail-repositories";
 import { openMailDatabase, runMigrations } from "../store/sqlite-store";
 
 export interface EmailHttpServerOptions {
@@ -20,12 +21,13 @@ export function createEmailHttpServer(options: EmailHttpServerOptions) {
   runMigrations(db);
   const readService = new MailboxReadService(db);
   const actionService = new MailboxActionService(db);
+  const auditRepository = new ActionAuditRepository(db);
   const authorizationService = new AuthorizationService(db);
   const hermesPluginService = new HermesPluginService(db, { port: options.port || Number(process.env.EMAIL_SERVICE_PORT || 5175) });
   const appVersionService = new AppVersionService(options.staticRoot);
 
   return createServer((request, response) => {
-    void handleRequest(request, response, readService, actionService, authorizationService, hermesPluginService, appVersionService, options.staticRoot);
+    void handleRequest(request, response, readService, actionService, auditRepository, authorizationService, hermesPluginService, appVersionService, options.staticRoot);
   });
 }
 
@@ -34,6 +36,7 @@ async function handleRequest(
   response: ServerResponse,
   readService: MailboxReadService,
   actionService: MailboxActionService,
+  auditRepository: ActionAuditRepository,
   authorizationService: AuthorizationService,
   hermesPluginService: HermesPluginService,
   appVersionService: AppVersionService,
@@ -90,6 +93,95 @@ async function handleRequest(
         return sendJson(response, { error: "message_not_found" }, 404);
       }
       return sendJson(response, { message });
+    }
+    if (request.method === "GET" && url.pathname.match(/^\/api\/mcp\/messages\/[^/]+\/body$/)) {
+      const messageId = decodeURIComponent(url.pathname.replace(/^\/api\/mcp\/messages\//, "").replace(/\/body$/, ""));
+      if (!isHighPrivilegeContext(context)) {
+        return sendJson(response, { error: "email_mcp_full_content_capability_required" }, 403);
+      }
+      const purpose = String(url.searchParams.get("purpose") || "").trim();
+      if (purpose.length < 6) {
+        return sendJson(response, { error: "email_mcp_purpose_required" }, 400);
+      }
+      const message = readService.getMessageBody(context, messageId);
+      if (!message) {
+        return sendJson(response, { error: "email_message_not_found" }, 404);
+      }
+      const offset = boundedOffset(url.searchParams.get("offset"));
+      const limit = boundedBodyLimit(url.searchParams.get("limit"));
+      const bodyText = message.bodyText.slice(offset, offset + limit);
+      const auditId = auditRepository.record({
+        accountId: message.accountId,
+        messageId,
+        actionType: "mcp_full_body_read",
+        status: "read_local_sanitized_body"
+      });
+      return sendJson(response, {
+        ok: true,
+        messageId,
+        accountId: message.accountId,
+        provider: message.provider,
+        subject: message.subject,
+        sender: message.sender,
+        receivedAt: message.receivedAt,
+        contentSource: message.contentSource,
+        bodyText,
+        offset,
+        limit,
+        returnedChars: bodyText.length,
+        totalChars: message.bodyText.length,
+        truncated: offset + bodyText.length < message.bodyText.length,
+        fullBodyReturned: offset === 0 && bodyText.length === message.bodyText.length,
+        attachmentContentIncluded: false,
+        auditId
+      });
+    }
+    if (request.method === "GET" && url.pathname.match(/^\/api\/mcp\/attachments\/[^/]+\/content$/)) {
+      const attachmentId = decodeURIComponent(url.pathname.replace(/^\/api\/mcp\/attachments\//, "").replace(/\/content$/, ""));
+      if (!isHighPrivilegeContext(context)) {
+        return sendJson(response, { error: "email_mcp_full_content_capability_required" }, 403);
+      }
+      const purpose = String(url.searchParams.get("purpose") || "").trim();
+      if (purpose.length < 6) {
+        return sendJson(response, { error: "email_mcp_purpose_required" }, 400);
+      }
+      const result = readService.getAttachmentContent(context, attachmentId);
+      if (!result) {
+        return sendJson(response, { error: "email_attachment_not_found" }, 404);
+      }
+      if (!result.blob) {
+        return sendJson(response, {
+          error: "email_attachment_content_unavailable",
+          attachmentId,
+          availabilityState: result.attachment.availabilityState
+        }, 404);
+      }
+      const offset = boundedOffset(url.searchParams.get("offset"));
+      const limit = boundedAttachmentLimit(url.searchParams.get("limit"));
+      const chunk = result.blob.content.subarray(offset, offset + limit);
+      const auditId = auditRepository.record({
+        accountId: result.attachment.accountId,
+        messageId: result.attachment.messageId,
+        actionType: "mcp_attachment_read",
+        status: "read_local_attachment_chunk"
+      });
+      return sendJson(response, {
+        ok: true,
+        attachmentId,
+        messageId: result.attachment.messageId,
+        filename: result.attachment.filename,
+        contentType: result.blob.contentType || result.attachment.contentType,
+        encoding: "base64",
+        data: chunk.toString("base64"),
+        offset,
+        limit,
+        returnedBytes: chunk.byteLength,
+        totalBytes: result.blob.sizeBytes,
+        truncated: offset + chunk.byteLength < result.blob.sizeBytes,
+        fullAttachmentReturned: offset === 0 && chunk.byteLength === result.blob.sizeBytes,
+        localOnly: true,
+        auditId
+      });
     }
     if (request.method === "PATCH" && url.pathname.match(/^\/api\/messages\/[^/]+\/read$/)) {
       const messageId = decodeURIComponent(url.pathname.replace(/^\/api\/messages\//, "").replace(/\/read$/, ""));
@@ -154,6 +246,22 @@ function serveStatic(response: ServerResponse, staticRoot: string, pathname: str
 function authContextFromRequest(request: IncomingMessage, url: URL, authorizationService: AuthorizationService): AuthContext {
   const token = url.searchParams.get("launch") || request.headers["x-email-session"]?.toString() || cookieValue(request.headers.cookie || "", "email_session");
   return authorizationService.contextFromSessionToken(token) || authorizationService.ensureBootstrapAdmin();
+}
+
+function isHighPrivilegeContext(context: AuthContext): boolean {
+  return context.role === "owner" || context.role === "admin";
+}
+
+function boundedBodyLimit(value: unknown): number {
+  return Math.min(Math.max(Number(value ?? 8000) || 8000, 1), 20000);
+}
+
+function boundedAttachmentLimit(value: unknown): number {
+  return Math.min(Math.max(Number(value ?? 65536) || 65536, 1), 262144);
+}
+
+function boundedOffset(value: unknown): number {
+  return Math.max(Number(value ?? 0) || 0, 0);
 }
 
 function launchCookieHeaders(url: URL): Record<string, string> {

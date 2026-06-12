@@ -69,6 +69,16 @@ export const migrationStatements = [
     updated_at TEXT NOT NULL,
     FOREIGN KEY(message_id) REFERENCES mail_messages(id)
   )`,
+  `CREATE TABLE IF NOT EXISTS mail_attachment_blobs (
+    attachment_id TEXT PRIMARY KEY,
+    message_id TEXT NOT NULL,
+    content_type TEXT,
+    size_bytes INTEGER NOT NULL,
+    content BLOB NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(attachment_id) REFERENCES mail_attachments(id) ON DELETE CASCADE,
+    FOREIGN KEY(message_id) REFERENCES mail_messages(id)
+  )`,
   `CREATE TABLE IF NOT EXISTS mail_sync_cursors (
     account_id TEXT NOT NULL,
     folder_id TEXT NOT NULL,

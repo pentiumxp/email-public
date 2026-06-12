@@ -1,6 +1,6 @@
 import type { GmailApiClient } from "../connectors/gmail/gmail-api-client";
 import type { GmailRuntimeConfig } from "../connectors/gmail/gmail-config";
-import { AccountRepository, AttachmentRepository, FolderRepository, MessageBodyRepository, MessageRepository, SyncCursorRepository } from "../store/mail-repositories";
+import { AccountRepository, AttachmentContentRepository, AttachmentRepository, FolderRepository, MessageBodyRepository, MessageRepository, SyncCursorRepository, type MailAttachmentRecord } from "../store/mail-repositories";
 import type { SqliteDatabase } from "../store/sqlite-store";
 import { localGmailFolderId, localGmailMessageId, normalizeGmailAttachments, normalizeGmailBody, normalizeGmailFolder, normalizeGmailMessage } from "./gmail-message-normalizer";
 
@@ -10,6 +10,8 @@ export interface GmailSyncSummary {
   foldersChanged: number;
   messagesSeen: number;
   attachmentMetadataSeen: number;
+  attachmentContentCached: number;
+  attachmentContentSkipped: number;
   syncMode?: "full" | "history" | "history-seeded" | "history-reset";
 }
 
@@ -19,6 +21,7 @@ export class GmailSyncService {
   private readonly messages: MessageRepository;
   private readonly bodies: MessageBodyRepository;
   private readonly attachments: AttachmentRepository;
+  private readonly attachmentContent: AttachmentContentRepository;
   private readonly cursors: SyncCursorRepository;
 
   constructor(private readonly config: GmailRuntimeConfig, private readonly client: GmailApiClient, db: SqliteDatabase) {
@@ -27,6 +30,7 @@ export class GmailSyncService {
     this.messages = new MessageRepository(db);
     this.bodies = new MessageBodyRepository(db);
     this.attachments = new AttachmentRepository(db);
+    this.attachmentContent = new AttachmentContentRepository(db);
     this.cursors = new SyncCursorRepository(db);
   }
 
@@ -40,6 +44,8 @@ export class GmailSyncService {
       foldersChanged: 0,
       messagesSeen: 0,
       attachmentMetadataSeen: 0,
+      attachmentContentCached: 0,
+      attachmentContentSkipped: 0,
       syncMode: "full"
     };
 
@@ -57,7 +63,7 @@ export class GmailSyncService {
         const page = await this.client.listMessagesPage(label.id, pageToken, Math.min(50, remaining));
         for (const item of page.messages) {
           const message = await this.client.getMessage(item.id);
-          this.upsertMessage(message, label.id, summary);
+          await this.upsertMessage(message, label.id, summary);
           seenForLabel += 1;
           changed = true;
         }
@@ -83,6 +89,8 @@ export class GmailSyncService {
       foldersChanged: 0,
       messagesSeen: 0,
       attachmentMetadataSeen: 0,
+      attachmentContentCached: 0,
+      attachmentContentSkipped: 0,
       syncMode: "history"
     };
 
@@ -121,7 +129,7 @@ export class GmailSyncService {
             }
             seenMessageIds.add(messageId);
             const message = await this.client.getMessage(messageId);
-            this.upsertMessage(message, fallbackLabelId, summary);
+            await this.upsertMessage(message, fallbackLabelId, summary);
           }
         }
         pageToken = page.nextPageToken;
@@ -161,13 +169,48 @@ export class GmailSyncService {
     return visibleLabels;
   }
 
-  private upsertMessage(message: Parameters<typeof normalizeGmailMessage>[1], fallbackLabelId: string, summary: GmailSyncSummary): void {
+  private async upsertMessage(message: Parameters<typeof normalizeGmailMessage>[1], fallbackLabelId: string, summary: GmailSyncSummary): Promise<void> {
     this.messages.upsert(normalizeGmailMessage(this.config, message, fallbackLabelId));
     this.bodies.upsert(normalizeGmailBody(message));
     const localAttachments = normalizeGmailAttachments(message);
     this.attachments.replaceForMessage(localGmailMessageId(message.id), localAttachments);
     summary.attachmentMetadataSeen += localAttachments.length;
+    await this.cacheAttachmentContents(message.id, localAttachments, summary);
     summary.messagesSeen += 1;
+  }
+
+  private async cacheAttachmentContents(providerMessageId: string, attachments: MailAttachmentRecord[], summary: GmailSyncSummary): Promise<void> {
+    for (const attachment of attachments) {
+      if (!attachment.providerAttachmentId) {
+        summary.attachmentContentSkipped += 1;
+        continue;
+      }
+      if (attachment.sizeBytes && attachment.sizeBytes > maxAttachmentCacheBytes()) {
+        this.attachments.setAvailabilityState(attachment.id, "cache-too-large", attachment.sizeBytes);
+        summary.attachmentContentSkipped += 1;
+        continue;
+      }
+      try {
+        const content = await this.client.getAttachmentContent(providerMessageId, attachment.providerAttachmentId);
+        if (content.byteLength > maxAttachmentCacheBytes()) {
+          this.attachments.setAvailabilityState(attachment.id, "cache-too-large", content.byteLength);
+          summary.attachmentContentSkipped += 1;
+          continue;
+        }
+        this.attachmentContent.upsert({
+          attachmentId: attachment.id,
+          messageId: attachment.messageId,
+          contentType: attachment.contentType,
+          sizeBytes: content.byteLength,
+          content
+        });
+        this.attachments.setAvailabilityState(attachment.id, "cached-local", content.byteLength);
+        summary.attachmentContentCached += 1;
+      } catch {
+        this.attachments.setAvailabilityState(attachment.id, "cache-error", attachment.sizeBytes);
+        summary.attachmentContentSkipped += 1;
+      }
+    }
   }
 
   private upsertHistoryCursor(historyId: string): void {
@@ -182,4 +225,8 @@ export class GmailSyncService {
 
 function gmailHistoryCursorId(): string {
   return localGmailFolderId("INBOX");
+}
+
+function maxAttachmentCacheBytes(): number {
+  return Math.max(Number(process.env.EMAIL_ATTACHMENT_CACHE_MAX_BYTES || 15 * 1024 * 1024), 1);
 }

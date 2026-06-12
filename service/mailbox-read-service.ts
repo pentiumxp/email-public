@@ -1,4 +1,4 @@
-import { AccountRepository, AttachmentRepository, FolderRepository, MessageRepository } from "../store/mail-repositories";
+import { AccountRepository, AttachmentContentRepository, AttachmentRepository, FolderRepository, MessageRepository } from "../store/mail-repositories";
 import type { SqliteDatabase } from "../store/sqlite-store";
 import type { AuthContext } from "./authorization-service";
 import { projectAccount, projectFolder, projectMessageDetail, projectMessageSummary } from "./privacy-projection-service";
@@ -8,12 +8,14 @@ export class MailboxReadService {
   private readonly folders: FolderRepository;
   private readonly messages: MessageRepository;
   private readonly attachments: AttachmentRepository;
+  private readonly attachmentContent: AttachmentContentRepository;
 
   constructor(db: SqliteDatabase) {
     this.accounts = new AccountRepository(db);
     this.folders = new FolderRepository(db);
     this.messages = new MessageRepository(db);
     this.attachments = new AttachmentRepository(db);
+    this.attachmentContent = new AttachmentContentRepository(db);
   }
 
   listAccounts(context: AuthContext) {
@@ -53,5 +55,37 @@ export class MailboxReadService {
       return null;
     }
     return projectMessageDetail(message, this.attachments.listByMessage(messageId));
+  }
+
+  getMessageBody(context: AuthContext, messageId: string) {
+    const message = this.messages.getDetail(messageId);
+    if (!message || !context.allowedAccountIds.includes(message.accountId)) {
+      return null;
+    }
+    return {
+      id: message.id,
+      accountId: message.accountId,
+      provider: message.provider,
+      subject: message.subject,
+      sender: message.senderDisplay || message.senderAddressBounded || "Unknown sender",
+      receivedAt: message.receivedAt,
+      contentSource: message.contentSource,
+      bodyText: message.indexedText || message.sanitizedExcerpt || ""
+    };
+  }
+
+  getAttachmentContent(context: AuthContext, attachmentId: string) {
+    const attachment = this.attachments.getWithAccount(attachmentId);
+    if (!attachment || !context.allowedAccountIds.includes(attachment.accountId)) {
+      return null;
+    }
+    const blob = this.attachmentContent.get(attachmentId);
+    if (!blob) {
+      return {
+        attachment,
+        blob: null
+      };
+    }
+    return { attachment, blob };
   }
 }

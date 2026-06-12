@@ -102,6 +102,7 @@ Tables:
 - `mail_messages`
 - `mail_message_bodies`
 - `mail_attachments`
+- `mail_attachment_blobs`
 - `mail_sync_cursors`
 - `mail_actions`
 - `mail_analysis_marks`
@@ -121,6 +122,7 @@ Message records should include:
 - read/unread;
 - flags;
 - attachment count;
+- local attachment cache availability;
 - body availability state;
 - sync version;
 - deletion/move tombstone.
@@ -140,7 +142,7 @@ Hermes Mobile must not:
 - own email OAuth tokens;
 - poll provider mailboxes directly;
 - store full raw email bodies in its own state;
-- sync attachments directly;
+- sync attachments directly or receive local attachment paths/provider payloads;
 - duplicate mailbox UI logic.
 
 ## Multi-User Authorization Model

@@ -107,7 +107,9 @@ This command covers:
 - launch-session account filtering;
 - missing MCP session context fails closed;
 - bounded message detail output without raw full body fields;
-- attachment metadata only;
+- attachment metadata remains the default detail projection; attachment content
+  is exposed only through the dedicated owner/admin MCP tool with purpose,
+  pagination, local-cache-only reads, and audit;
 - local-only delete tombstone writes an audit row, removes the message from normal reads, and reports `remoteApplied=false`;
 - bulk local delete tools default to dry-run, enforce session account visibility, support exclude keywords, cap candidates, and return bounded samples/sender breakdowns;
 - stdio JSON-RPC initialize, tools/list, and tools/call smoke;

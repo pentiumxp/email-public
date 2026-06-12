@@ -54,7 +54,8 @@ export function normalizeGmailAttachments(message: GmailMessage) {
     filename: part.filename || "attachment",
     contentType: part.mimeType || null,
     sizeBytes: part.body?.size || null,
-    availabilityState: "metadata-only"
+    availabilityState: "metadata-only",
+    providerAttachmentId: part.body?.attachmentId || null
   }));
 }
 

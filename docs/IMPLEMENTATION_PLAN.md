@@ -136,8 +136,14 @@ Implement read-only tools first:
 - `email.list_mailboxes` complete.
 - `email.search_messages` complete.
 - `email.get_message` complete with bounded excerpt and no raw body field.
+- `email.get_message_body` complete as a high-privilege cached sanitized body
+  reader for owner/admin sessions only, with required purpose, pagination caps,
+  and local audit.
 - `email.get_digest` complete.
-- `email.list_attachments` complete with metadata only.
+- `email.list_attachments` complete with metadata and local cache availability.
+- `email.get_attachment_content` complete for locally cached attachments as a
+  high-privilege owner/admin base64 chunk reader with required purpose,
+  pagination caps, and local audit.
 - `email.sync_account` exists as a read-only compatibility diagnostic; provider sync side effects remain outside MCP.
 - `email.apply_mail_action` supports audited local-only `delete_local` tombstones. It does not call remote providers.
 - `email.delete_local_by_search` supports dry-run-by-default query cleanup with include/exclude safeguards, bounded samples, sender breakdown, and local-only tombstones.
@@ -157,7 +163,8 @@ Write tools later and gated:
 Tests:
 
 - tool schema is stable;
-- outputs are privacy-bounded;
+- outputs are privacy-bounded, with full body and attachment content available
+  only through dedicated owner/admin tools with purpose, pagination, and audit;
 - invalid account/folder/message ids fail closed;
 - read tools reuse launch-session authorization and filter by allowed account ids;
 - missing MCP session context fails closed;
@@ -262,7 +269,9 @@ Gmail:
 - Gmail V1 requests only `https://www.googleapis.com/auth/gmail.readonly`.
 - Gmail OAuth supports device flow for TV / limited-input clients and browser localhost callback for Desktop clients that require a client secret.
 - Gmail OAuth has been completed for the local account `xuxinxp@gmail.com`.
-- Gmail sync maps labels to local folders and caches message text plus attachment metadata only. Attachment binary download, remote writes, send, reply, delete, archive, and mark-read are not enabled.
+- Gmail sync maps labels to local folders and caches message text plus
+  attachment metadata and bounded local attachment content. Remote writes, send,
+  reply, delete, archive, and mark-read are not enabled.
 - First Gmail sync completed with 21 labels, 425 messages, and 5 attachment metadata rows.
 - Gmail label counts are read from `users.labels.get`; `users.labels.list` alone does not include reliable `messagesTotal/messagesUnread` counts for the UI folder badges.
 - Gmail background polling now uses `users.history.list` with the read-only scope after seeding a local history cursor. This keeps few-minute polling lightweight and avoids the older repeated scan of every visible label page.
@@ -278,6 +287,9 @@ Qifan / AliMail IMAP:
 - start with read-only auth diagnostics; initial scaffold complete.
 - use `imap.qiye.aliyun.com:993` TLS as the first documented host/port candidate; initial config template created.
 - do not assume historical Hermes credentials are valid; current working application password was supplied explicitly by the user and stored only in the excluded Email plugin secret store.
+- IMAP sync parses fetched message source with `mailparser`, stores attachment
+  metadata, and caches attachment content in the local Email runtime database
+  under the same `mail_attachment_blobs` path as Gmail and Outlook.
 - do not enable SMTP or send/reply in V1.
 - credentials must be supplied in the Email plugin excluded secret store or current shell env, not copied from Hermes runtime.
 

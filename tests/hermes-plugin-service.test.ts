@@ -29,6 +29,11 @@ describe("HermesPluginService", () => {
       priority: 10,
       entry: { type: "plugin_route", pluginRoute: "inbox" }
     });
+    expect(manifest.mcp.required_tools).toEqual(expect.arrayContaining([
+      "email.get_message_body",
+      "email.list_attachments",
+      "email.get_attachment_content"
+    ]));
     expect(JSON.stringify(manifest)).not.toContain("access_token");
     expect(JSON.stringify(manifest)).not.toContain("refresh_token");
     expect(JSON.stringify(manifest)).not.toContain("secret");

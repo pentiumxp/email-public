@@ -81,7 +81,10 @@ export class HermesPluginService {
           "email.list_accounts",
           "email.search_messages",
           "email.get_message",
+          "email.get_message_body",
           "email.list_mailboxes",
+          "email.list_attachments",
+          "email.get_attachment_content",
           "email.get_digest",
           "email.sync_account",
           "email.apply_mail_action"

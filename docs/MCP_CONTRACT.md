@@ -177,6 +177,45 @@ Aliases:
 - `email_get_message`
 - `email_get_message_summary`
 
+### `email.get_message_body`
+
+High-privilege read of locally cached sanitized/indexed message body text.
+This is a separate tool from `email.get_message` so normal MCP detail calls stay
+metadata/excerpt-only.
+
+Input:
+
+- required `sessionToken`, unless the host supplies `EMAIL_MCP_SESSION_TOKEN`
+- `messageId`
+- `purpose`: short human-readable reason for this full-content read
+- optional `offset`, default `0`
+- optional `limit`, default `8000`, clamped to `1..20000`
+
+Output:
+
+- message metadata needed to identify the message;
+- `bodyText`: cached sanitized/indexed local text slice only;
+- `offset`, `limit`, `returnedChars`, `totalChars`;
+- `truncated` and `fullBodyReturned`;
+- `attachmentContentIncluded: false`;
+- `auditId`.
+
+Rules:
+
+- requires a valid owner/admin launch session;
+- member sessions fail with `email_mcp_full_content_capability_required`;
+- missing or too-short `purpose` fails with `email_mcp_purpose_required`;
+- verifies the current session's allowed account ids before reading;
+- writes a local `mail_actions` audit row with `mcp_full_body_read`;
+- does not return raw MIME, provider headers, attachment content, local file
+  paths, provider tokens, provider passwords, or provider logs;
+- callers must page with `offset`/`limit` when `truncated=true`.
+
+Aliases:
+
+- `email_get_message_body`
+- `mcp_email_get_message_body`
+
 ### `email.list_attachments`
 
 Input:
@@ -186,11 +225,52 @@ Input:
 
 Output:
 
-- attachment metadata only.
+- attachment metadata and local cache availability only.
+
+### `email.get_attachment_content`
+
+High-privilege read of locally cached attachment content. This tool never
+contacts Gmail, Outlook, AliMail, IMAP, or SMTP providers; provider download is
+owned by the sync services, which cache attachments in the local Email runtime.
+
+Input:
+
+- required `sessionToken`, unless the host supplies `EMAIL_MCP_SESSION_TOKEN`
+- `attachmentId`
+- `purpose`: short human-readable reason for this attachment read
+- optional `offset`, default `0`
+- optional `limit`, default `65536`, clamped to `1..262144` bytes
+
+Output:
+
+- attachment id, message id, filename, content type;
+- `encoding: base64`;
+- `data`: bounded base64 chunk;
+- `offset`, `limit`, `returnedBytes`, `totalBytes`;
+- `truncated` and `fullAttachmentReturned`;
+- `localOnly: true`;
+- `auditId`.
+
+Rules:
+
+- requires a valid owner/admin launch session;
+- member sessions fail with `email_mcp_full_content_capability_required`;
+- missing or too-short `purpose` fails with `email_mcp_purpose_required`;
+- verifies the current session's allowed account ids through the attachment's
+  parent message before reading;
+- if the attachment is not locally cached, fails with
+  `email_attachment_content_unavailable` and returns the metadata
+  `availabilityState`;
+- writes a local `mail_actions` audit row with `mcp_attachment_read`;
+- does not return local filesystem paths, provider tokens, provider passwords,
+  raw MIME, provider headers, or uncapped binary payloads;
+- callers must page with `offset`/`limit` when `truncated=true`.
 
 Aliases:
 
 - `email_list_attachments`
+- `email_get_attachment_content`
+- `mcp_email_get_attachment_content`
 
 ### `email.sync_account`
 

@@ -59,6 +59,11 @@ export interface GmailMessage {
   payload?: GmailMessagePart;
 }
 
+export interface GmailAttachmentBody {
+  data?: string;
+  size?: number;
+}
+
 export interface GmailMessagePart {
   partId?: string;
   mimeType?: string;

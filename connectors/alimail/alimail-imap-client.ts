@@ -33,6 +33,15 @@ export interface AliMailMessage {
   text: string;
   hasAttachments: boolean;
   attachmentCount: number;
+  attachments: AliMailAttachment[];
+}
+
+export interface AliMailAttachment {
+  index: number;
+  filename: string;
+  contentType: string | null;
+  sizeBytes: number;
+  content: Buffer;
 }
 
 export class AliMailImapClient {
@@ -138,6 +147,13 @@ async function normalizeFetchMessage(folderPath: string, item: FetchMessageObjec
   const from = item.envelope?.from?.[0];
   const parsedFrom = parsed.from?.value?.[0];
   const attachmentCount = parsed.attachments.length || countAttachments(item.bodyStructure);
+  const attachments = parsed.attachments.map((attachment, index) => ({
+    index,
+    filename: attachment.filename || "attachment",
+    contentType: attachment.contentType || null,
+    sizeBytes: attachment.size || attachment.content.byteLength,
+    content: attachment.content
+  }));
   return {
     uid: Number(item.uid || 0),
     folderPath,
@@ -148,7 +164,8 @@ async function normalizeFetchMessage(folderPath: string, item: FetchMessageObjec
     flags: Array.from(item.flags || []).map(String),
     text: parsed.text || htmlToText(parsed.html ? String(parsed.html) : ""),
     hasAttachments: attachmentCount > 0,
-    attachmentCount
+    attachmentCount,
+    attachments
   };
 }
 

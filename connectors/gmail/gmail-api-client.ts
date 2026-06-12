@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { setTimeout as sleep } from "node:timers/promises";
 import { configureProviderFetchProxyFromEnv } from "../http/provider-fetch-proxy";
 import { assertGmailClientId, GMAIL_SCOPES, type GmailRuntimeConfig, writeJsonFile } from "./gmail-config";
-import type { GmailAuthStatus, GmailHistoryPage, GmailLabel, GmailMessage, GmailMessageListPage, GmailProfile } from "./types";
+import type { GmailAttachmentBody, GmailAuthStatus, GmailHistoryPage, GmailLabel, GmailMessage, GmailMessageListPage, GmailProfile } from "./types";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -199,6 +199,13 @@ export class GmailApiClient {
     return await this.gmailGet(`/users/me/messages/${encodeURIComponent(messageId)}`, { format: "full" }) as unknown as GmailMessage;
   }
 
+  async getAttachmentContent(messageId: string, attachmentId: string): Promise<Buffer> {
+    const payload = await this.gmailGet(
+      `/users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`
+    ) as unknown as GmailAttachmentBody;
+    return decodeBase64UrlBuffer(payload.data || "");
+  }
+
   private async gmailGet(path: string, params?: Record<string, string>): Promise<Record<string, unknown>> {
     const query = params ? `?${new URLSearchParams(params).toString()}` : "";
     const accessToken = await this.ensureAccessToken();
@@ -275,6 +282,11 @@ export class GmailApiClient {
       throw new Error("GMAIL_NO_PENDING_DEVICE_LOGIN");
     }
   }
+}
+
+function decodeBase64UrlBuffer(value: string): Buffer {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(normalized, "base64");
 }
 
 function openUrlBestEffort(url: string): void {

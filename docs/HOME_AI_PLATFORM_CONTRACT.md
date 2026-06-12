@@ -96,7 +96,8 @@ Minimum closure for Email production changes:
    the selected Gateway profile and selected worker expose the callable
    `mcp_email_*` tool names;
 5. for mailbox sync or write-action changes, perform a bounded readback smoke
-   with metadata-only output.
+   with counts, availability states, and other non-secret metadata; do not print
+   raw message bodies, attachment content, local paths, or provider payloads.
 
 ## Latest Production Evidence
 

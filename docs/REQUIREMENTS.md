@@ -28,7 +28,7 @@ Required:
 - Account registration shell for providers.
 - Outlook/Hotmail connector using Microsoft Graph.
 - Gmail connector design and optional first implementation.
-- Local SQLite store for account, folder, message, attachment metadata, sync cursor, and action state.
+- Local SQLite store for account, folder, message, attachment metadata/content cache, sync cursor, and action state.
 - Incremental sync worker.
 - Message list, account list, folder list, search, and message detail UI.
 - Read-only MCP query tools.
@@ -41,7 +41,7 @@ Deferred:
 - Sending mail.
 - Replying to mail.
 - Calendar/contact integration.
-- Full attachment OCR/content extraction.
+- Full attachment OCR/content extraction beyond local caching.
 - Complex multi-user delegation.
 - Full enterprise compliance archive.
 - Public release.
@@ -74,8 +74,8 @@ Deferred:
 
 ### Local Store
 
-- Store account metadata, folder metadata, message metadata, bounded body text or text index, attachment metadata, sync cursors, and action audit.
-- Separate attachments from the main database if binary storage is needed.
+- Store account metadata, folder metadata, message metadata, bounded body text or text index, attachment metadata, local attachment content cache, sync cursors, and action audit.
+- Keep attachment content inside the Email plugin local runtime/cache boundary and expose it only through gated, audited, bounded interfaces.
 - Avoid logging or handoff of full email bodies.
 
 ### UI

@@ -156,6 +156,16 @@ export class MicrosoftGraphClient {
     return (payload.value || []) as GraphAttachment[];
   }
 
+  async getAttachmentContent(messageId: string, attachmentId: string): Promise<Buffer | null> {
+    const payload = await this.graphGet(`/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`, {
+      $select: "id,name,contentType,size,contentBytes"
+    }) as unknown as GraphAttachment;
+    if (!payload.contentBytes) {
+      return null;
+    }
+    return Buffer.from(payload.contentBytes, "base64");
+  }
+
   private async graphGet(path: string, params?: Record<string, string>): Promise<Record<string, unknown>> {
     const query = params ? `?${new URLSearchParams(params).toString()}` : "";
     return this.graphGetUrl(`${GRAPH_BASE}${path}${query}`);

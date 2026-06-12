@@ -1,5 +1,51 @@
 # Email Plugin Handoff
 
+## Latest Update - 2026-06-12 Attachment Cache And Full-Content MCP Boundary
+
+- Implemented the first local attachment-content cache path:
+  - new `mail_attachment_blobs` local SQLite table stores attachment bytes
+    inside the Email plugin runtime database;
+  - Gmail sync downloads attachment bodies through the Gmail API and marks
+    metadata `availability_state` as `cached-local`, `cache-too-large`, or
+    `cache-error`;
+  - Outlook full sync and delta sync download Graph file attachment content
+    when `contentBytes` is available and mark the same local availability
+    states;
+  - AliMail IMAP sync stores parsed MIME attachments from the fetched message
+    source into the same local attachment cache.
+- Added high-privilege MCP content tools:
+  - `email.get_message_body` with aliases `email_get_message_body` and
+    `mcp_email_get_message_body`;
+  - `email.get_attachment_content` with aliases
+    `email_get_attachment_content` and `mcp_email_get_attachment_content`.
+- Safety model:
+  - normal `email.get_message` still returns bounded detail without raw
+    `bodyText`;
+  - normal `email.list_attachments` returns metadata and local cache
+    availability only;
+  - full body and attachment content reads require owner/admin launch session,
+    explicit `purpose`, account visibility through the session, pagination
+    caps, local-only reads, and a `mail_actions` audit row;
+  - attachment content is returned as bounded base64 chunks and never exposes
+    provider tokens, provider passwords, local filesystem paths, raw MIME, or
+    uncapped binary payloads.
+- Updated docs:
+  - `docs/MCP_CONTRACT.md`;
+  - `docs/SECURITY_PRIVACY.md`;
+  - `docs/IMPLEMENTATION_PLAN.md`;
+  - `docs/REQUIREMENTS.md`;
+  - `docs/ARCHITECTURE.md`;
+  - `docs/HARNESS_AND_DOCS_RULES.md`.
+- Verification:
+  - focused MCP/sync/manifest tests passed:
+    `npm exec vitest run tests/alimail-sync-service.test.ts tests/gmail-sync-service.test.ts tests/outlook-sync-service.test.ts tests/outlook-delta-sync-service.test.ts tests/email-mcp-service.test.ts tests/hermes-plugin-service.test.ts tests/architecture-boundary.test.ts`;
+  - `npm run check` passed: build plus 15 test files / 50 tests;
+  - central AI Ops required-check selection still classified plugin absolute
+    paths conservatively as H3, so Email-local H1 MCP/sync harness was followed;
+  - `node tests/architecture-code-test-harness-map.test.js` passed in the Home
+    AI app workspace;
+  - `git diff --check` passed.
+
 ## Latest Update - 2026-06-11 Narrow Desktop Detail Fix
 
 - Investigated a report that clicking an email in a desktop browser did not

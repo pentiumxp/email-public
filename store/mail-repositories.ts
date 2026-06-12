@@ -70,6 +70,19 @@ export interface MailAttachmentRecord {
   contentType?: string | null;
   sizeBytes?: number | null;
   availabilityState?: string;
+  providerAttachmentId?: string | null;
+}
+
+export interface MailAttachmentWithAccountRecord extends MailAttachmentRecord {
+  accountId: string;
+}
+
+export interface MailAttachmentBlobRecord {
+  attachmentId: string;
+  messageId: string;
+  contentType?: string | null;
+  sizeBytes: number;
+  content: Buffer;
 }
 
 export interface SyncCursorRecord {
@@ -478,6 +491,73 @@ export class AttachmentRepository {
       sizeBytes: row.size_bytes === null || row.size_bytes === undefined ? null : Number(row.size_bytes),
       availabilityState: String(row.availability_state)
     }));
+  }
+
+  getWithAccount(attachmentId: string): MailAttachmentWithAccountRecord | null {
+    const row = this.db.prepare(
+      `SELECT a.id, a.message_id, a.filename, a.content_type, a.size_bytes, a.availability_state, m.account_id
+       FROM mail_attachments a
+       JOIN mail_messages m ON m.id = a.message_id
+       WHERE a.id = ? AND m.is_deleted = 0`
+    ).get(attachmentId) as Record<string, unknown> | undefined;
+    if (!row) {
+      return null;
+    }
+    return {
+      id: String(row.id),
+      messageId: String(row.message_id),
+      filename: String(row.filename),
+      contentType: row.content_type ? String(row.content_type) : null,
+      sizeBytes: row.size_bytes === null || row.size_bytes === undefined ? null : Number(row.size_bytes),
+      availabilityState: String(row.availability_state),
+      accountId: String(row.account_id)
+    };
+  }
+
+  setAvailabilityState(attachmentId: string, availabilityState: string, sizeBytes?: number | null): void {
+    this.db.prepare(
+      `UPDATE mail_attachments
+       SET availability_state = ?, size_bytes = COALESCE(?, size_bytes), updated_at = ?
+       WHERE id = ?`
+    ).run(availabilityState, sizeBytes ?? null, new Date().toISOString(), attachmentId);
+  }
+}
+
+export class AttachmentContentRepository {
+  constructor(private readonly db: SqliteDatabase) {}
+
+  upsert(input: MailAttachmentBlobRecord): void {
+    const now = new Date().toISOString();
+    this.db.prepare(
+      `INSERT INTO mail_attachment_blobs (
+        attachment_id, message_id, content_type, size_bytes, content, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(attachment_id) DO UPDATE SET
+        message_id = excluded.message_id,
+        content_type = excluded.content_type,
+        size_bytes = excluded.size_bytes,
+        content = excluded.content,
+        updated_at = excluded.updated_at`
+    ).run(input.attachmentId, input.messageId, input.contentType ?? null, input.sizeBytes, input.content, now);
+  }
+
+  get(attachmentId: string): MailAttachmentBlobRecord | null {
+    const row = this.db.prepare(
+      `SELECT attachment_id, message_id, content_type, size_bytes, content
+       FROM mail_attachment_blobs
+       WHERE attachment_id = ?`
+    ).get(attachmentId) as Record<string, unknown> | undefined;
+    if (!row) {
+      return null;
+    }
+    const content = row.content instanceof Buffer ? row.content : Buffer.from(row.content as Uint8Array);
+    return {
+      attachmentId: String(row.attachment_id),
+      messageId: String(row.message_id),
+      contentType: row.content_type ? String(row.content_type) : null,
+      sizeBytes: Number(row.size_bytes),
+      content
+    };
   }
 }
 

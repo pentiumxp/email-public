@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EmailMcpService } from "../service/email-mcp-service";
 import { AuthorizationService } from "../service/authorization-service";
 import { handleMcpJsonRpcLine } from "../mcp/stdio-protocol";
-import { AccountRepository, AttachmentRepository, FolderRepository, MessageBodyRepository, MessageRepository } from "../store/mail-repositories";
+import { AccountRepository, AttachmentContentRepository, AttachmentRepository, FolderRepository, MessageBodyRepository, MessageRepository } from "../store/mail-repositories";
 import { openMailDatabase, runMigrations } from "../store/sqlite-store";
 
 describe("EmailMcpService", () => {
@@ -16,7 +16,9 @@ describe("EmailMcpService", () => {
       "email.list_mailboxes",
       "email.search_messages",
       "email.get_message",
+      "email.get_message_body",
       "email.get_digest",
+      "email.get_attachment_content",
       "email.sync_account",
       "email.apply_mail_action",
       "email.delete_local_by_search",
@@ -89,6 +91,146 @@ describe("EmailMcpService", () => {
       fullBodyAvailable: true,
       attachments: [expect.objectContaining({ filename: "report.pdf", availabilityState: "metadata-only" })]
     }));
+  });
+
+  it("returns cached sanitized body text only for high-privilege MCP sessions with audit", () => {
+    const db = openMailDatabase();
+    runMigrations(db);
+    seedAccount(db, "acct-a", "folder-a", "msg-a", "Allowed subject");
+    new MessageBodyRepository(db).upsert({
+      messageId: "msg-a",
+      sanitizedExcerpt: "Short safe excerpt",
+      indexedText: "0123456789abcdefghijklmnopqrstuvwxyz",
+      contentSource: "test"
+    });
+    const ownerSession = new AuthorizationService(db).createLaunchSession({
+      workspaceId: "workspace-1",
+      userId: "owner-1",
+      role: "owner",
+      allowedAccountIds: ["acct-a"]
+    });
+    const memberSession = new AuthorizationService(db).createLaunchSession({
+      workspaceId: "workspace-1",
+      userId: "member-1",
+      role: "member",
+      allowedAccountIds: ["acct-a"]
+    });
+    const service = new EmailMcpService(db);
+
+    expect(service.callTool("email.get_message_body", {
+      sessionToken: memberSession.token,
+      messageId: "msg-a",
+      purpose: "investigate user-selected message"
+    })).toMatchObject({ ok: false, error: "email_mcp_full_content_capability_required" });
+    expect(service.callTool("email.get_message_body", {
+      sessionToken: ownerSession.token,
+      messageId: "msg-a"
+    })).toMatchObject({ ok: false, error: "email_mcp_purpose_required" });
+
+    const body = service.callTool("mcp_email_get_message_body", {
+      sessionToken: ownerSession.token,
+      messageId: "msg-a",
+      purpose: "investigate user-selected message",
+      offset: 10,
+      limit: 12
+    });
+
+    expect(body).toMatchObject({
+      ok: true,
+      messageId: "msg-a",
+      bodyText: "abcdefghijkl",
+      offset: 10,
+      limit: 12,
+      returnedChars: 12,
+      totalChars: 36,
+      truncated: true,
+      attachmentContentIncluded: false
+    });
+    expect(db.prepare("SELECT action_type, status FROM mail_actions WHERE message_id = 'msg-a'").get()).toEqual({
+      action_type: "mcp_full_body_read",
+      status: "read_local_sanitized_body"
+    });
+  });
+
+  it("returns locally cached attachment content as bounded base64 chunks only for high-privilege sessions", () => {
+    const db = openMailDatabase();
+    runMigrations(db);
+    seedAccount(db, "acct-a", "folder-a", "msg-a", "Allowed subject");
+    new AttachmentRepository(db).replaceForMessage("msg-a", [{
+      id: "att-a",
+      messageId: "msg-a",
+      filename: "report.txt",
+      contentType: "text/plain",
+      sizeBytes: 26,
+      availabilityState: "cached-local"
+    }, {
+      id: "att-metadata-only",
+      messageId: "msg-a",
+      filename: "remote.pdf",
+      contentType: "application/pdf",
+      sizeBytes: 100,
+      availabilityState: "metadata-only"
+    }]);
+    new AttachmentContentRepository(db).upsert({
+      attachmentId: "att-a",
+      messageId: "msg-a",
+      contentType: "text/plain",
+      sizeBytes: 26,
+      content: Buffer.from("abcdefghijklmnopqrstuvwxyz")
+    });
+    const ownerSession = new AuthorizationService(db).createLaunchSession({
+      workspaceId: "workspace-1",
+      userId: "owner-1",
+      role: "owner",
+      allowedAccountIds: ["acct-a"]
+    });
+    const memberSession = new AuthorizationService(db).createLaunchSession({
+      workspaceId: "workspace-1",
+      userId: "member-1",
+      role: "member",
+      allowedAccountIds: ["acct-a"]
+    });
+    const service = new EmailMcpService(db);
+
+    expect(service.callTool("email.get_attachment_content", {
+      sessionToken: memberSession.token,
+      attachmentId: "att-a",
+      purpose: "inspect user-selected attachment"
+    })).toMatchObject({ ok: false, error: "email_mcp_full_content_capability_required" });
+
+    const chunk = service.callTool("mcp_email_get_attachment_content", {
+      sessionToken: ownerSession.token,
+      attachmentId: "att-a",
+      purpose: "inspect user-selected attachment",
+      offset: 2,
+      limit: 5
+    });
+    expect(chunk).toMatchObject({
+      ok: true,
+      attachmentId: "att-a",
+      filename: "report.txt",
+      encoding: "base64",
+      data: Buffer.from("cdefg").toString("base64"),
+      offset: 2,
+      returnedBytes: 5,
+      totalBytes: 26,
+      truncated: true,
+      localOnly: true
+    });
+    expect(db.prepare("SELECT action_type, status FROM mail_actions WHERE message_id = 'msg-a'").get()).toEqual({
+      action_type: "mcp_attachment_read",
+      status: "read_local_attachment_chunk"
+    });
+
+    expect(service.callTool("email.get_attachment_content", {
+      sessionToken: ownerSession.token,
+      attachmentId: "att-metadata-only",
+      purpose: "inspect user-selected attachment"
+    })).toMatchObject({
+      ok: false,
+      error: "email_attachment_content_unavailable",
+      availabilityState: "metadata-only"
+    });
   });
 
   it("applies local delete tombstone through MCP with session authorization and audit", () => {

@@ -40,16 +40,20 @@ describe("GmailSyncService", () => {
             ]
           }
         };
+      },
+      async getAttachmentContent() {
+        return Buffer.from("cached gmail attachment");
       }
     } as unknown as GmailApiClient;
 
     const summary = await new GmailSyncService(config, fakeClient, db).syncAll();
 
-    expect(summary).toMatchObject({ foldersSeen: 1, messagesSeen: 1, foldersChanged: 1, attachmentMetadataSeen: 1 });
+    expect(summary).toMatchObject({ foldersSeen: 1, messagesSeen: 1, foldersChanged: 1, attachmentMetadataSeen: 1, attachmentContentCached: 1 });
     expect(db.prepare("SELECT message_count, unread_count FROM mail_folders").get()).toEqual({ message_count: 12, unread_count: 3 });
     expect(db.prepare("SELECT provider, subject, is_read FROM mail_messages").get()).toEqual({ provider: "gmail", subject: "Gmail hello", is_read: 0 });
     expect(db.prepare("SELECT indexed_text FROM mail_message_bodies").get()).toEqual({ indexed_text: "hello body" });
-    expect(db.prepare("SELECT filename FROM mail_attachments").get()).toEqual({ filename: "file.pdf" });
+    expect(db.prepare("SELECT filename, availability_state FROM mail_attachments").get()).toEqual({ filename: "file.pdf", availability_state: "cached-local" });
+    expect(db.prepare("SELECT size_bytes FROM mail_attachment_blobs").get()).toEqual({ size_bytes: 23 });
     expect(db.prepare("SELECT cursor, cursor_type FROM mail_sync_cursors WHERE folder_id = 'gmail-folder-INBOX'").get()).toEqual({ cursor: "1", cursor_type: "gmail-history-id" });
   });
 

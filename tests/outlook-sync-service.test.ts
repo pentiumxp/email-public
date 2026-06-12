@@ -35,15 +35,19 @@ describe("OutlookSyncService", () => {
       },
       async listAttachmentMetadata() {
         return [{ id: "att-1", name: "file.pdf", contentType: "application/pdf", size: 123 }];
+      },
+      async getAttachmentContent() {
+        return Buffer.from("cached outlook attachment");
       }
     } as unknown as MicrosoftGraphClient;
 
     const summary = await new OutlookSyncService(fakeGraph, db).syncAll();
 
-    expect(summary).toMatchObject({ foldersSeen: 1, messagesSeen: 1, messagesWithAttachments: 1, attachmentMetadataSeen: 1 });
+    expect(summary).toMatchObject({ foldersSeen: 1, messagesSeen: 1, messagesWithAttachments: 1, attachmentMetadataSeen: 1, attachmentContentCached: 1 });
     expect(db.prepare("SELECT COUNT(*) AS count FROM mail_messages").get()).toEqual({ count: 1 });
     expect(db.prepare("SELECT indexed_text FROM mail_message_bodies").get()).toEqual({ indexed_text: "Hello body" });
-    expect(db.prepare("SELECT filename FROM mail_attachments").get()).toEqual({ filename: "file.pdf" });
+    expect(db.prepare("SELECT filename, availability_state FROM mail_attachments").get()).toEqual({ filename: "file.pdf", availability_state: "cached-local" });
+    expect(db.prepare("SELECT size_bytes FROM mail_attachment_blobs").get()).toEqual({ size_bytes: 25 });
   });
 
   it("resumes from a stored next link instead of restarting a folder", async () => {

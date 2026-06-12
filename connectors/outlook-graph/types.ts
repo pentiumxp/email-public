@@ -40,6 +40,8 @@ export interface GraphAttachment {
   name: string;
   contentType?: string;
   size?: number;
+  contentBytes?: string;
+  "@odata.type"?: string;
 }
 
 export interface GraphMessagePage {

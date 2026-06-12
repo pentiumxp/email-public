@@ -43,12 +43,28 @@ export function normalizeAliMailBody(message: AliMailMessage) {
   };
 }
 
+export function normalizeAliMailAttachments(message: AliMailMessage) {
+  return message.attachments.map((attachment) => ({
+    id: localAliMailAttachmentId(message.folderPath, message.uid, attachment.index),
+    messageId: localAliMailMessageId(message.folderPath, message.uid),
+    filename: attachment.filename || "attachment",
+    contentType: attachment.contentType,
+    sizeBytes: attachment.sizeBytes,
+    availabilityState: "metadata-only",
+    providerAttachmentId: String(attachment.index)
+  }));
+}
+
 export function localAliMailFolderId(folderPath: string): string {
   return `alimail-folder-${folderPath.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
 function localAliMailMessageId(folderPath: string, uid: number): string {
   return `alimail-msg-${folderPath.replace(/[^a-zA-Z0-9_-]/g, "_")}-${uid}`;
+}
+
+function localAliMailAttachmentId(folderPath: string, uid: number, index: number): string {
+  return `alimail-att-${folderPath.replace(/[^a-zA-Z0-9_-]/g, "_")}-${uid}-${index}`;
 }
 
 function boundAddress(address: string): string | null {
